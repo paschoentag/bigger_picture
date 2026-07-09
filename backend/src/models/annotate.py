@@ -332,6 +332,9 @@ class MyStatsResponse(BaseModel):
     """The signed-in player's own statistics across all three game stages."""
 
     window: int = Field(description="Size of the recent-annotation window used for the windowed accuracies.")
+    unconfirmed_exp: int = Field(
+        description="Experience the player will gain once their currently pending (unreviewed) submissions are approved by other players."
+    )
     overlap: OverlapStats = Field(description="Stage 1 (Finding Overlap) statistics.")
     annotate: AnnotateStats = Field(description="Stage 2 (Annotating) statistics.")
     verify: VerifyStats = Field(description="Stage 3 (Verification) statistics.")

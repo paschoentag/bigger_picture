@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from src import config
 from src.api.deps import require_current_user
 from src.constants import (
     ANNOTATION_APPROVED,
     ANNOTATION_DELETED,
     ANNOTATION_REVIEW_FAILED,
+    ANNOTATION_REVIEW_PENDING,
     CANDIDATE_STATUS_INT,
     CandidateStatus,
 )
@@ -119,6 +121,29 @@ def _annotate_stats(db: Session, user_id: int, window: int) -> AnnotateStats:
     )
 
 
+def _unconfirmed_exp(db: Session, user_id: int) -> int:
+    """Experience the user will earn once their pending submissions are approved.
+
+    Reviewing others' work grants exp immediately (already in `user.exp`); the
+    creator's reward is only granted when their annotation is approved, so every
+    still-pending annotation represents exp that has not yet been confirmed.
+    """
+    pending_points = db.execute(
+        select(func.count())
+        .select_from(PointAnnotation)
+        .where(PointAnnotation.created_by == user_id, PointAnnotation.status_id == ANNOTATION_REVIEW_PENDING)
+    ).scalar_one()
+    pending_candidates = db.execute(
+        select(func.count())
+        .select_from(CandidateAnnotation)
+        .where(CandidateAnnotation.created_by == user_id, CandidateAnnotation.status_id == ANNOTATION_REVIEW_PENDING)
+    ).scalar_one()
+    return (
+        pending_points * config.POINT_ANNOTATION_REVIEW_EXP
+        + pending_candidates * config.CANDIDATE_ANNOTATION_REVIEW_EXP
+    )
+
+
 def _verify_stats(db: Session, user_id: int) -> VerifyStats:
     """Counts of reviews the user performed across overlap and point annotations."""
     verified = accepted = faulty_found = 0
@@ -157,6 +182,7 @@ def get_my_stats(request: Request, window: int = 100, db: Session = Depends(get_
 
     return MyStatsResponse(
         window=window,
+        unconfirmed_exp=_unconfirmed_exp(db, user.id),
         overlap=_overlap_stats(db, user.id, window),
         annotate=_annotate_stats(db, user.id, window),
         verify=_verify_stats(db, user.id),

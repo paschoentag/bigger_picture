@@ -29,7 +29,7 @@ export default function OverlapGame({
   const [error, setError] = useState<string | null>(null)
   const [reviewedCount, setReviewedCount] = useState(0)
   const [gridSize, setGridSize] = useState<GridSize>(0)
-  const { stats, window: statsWindow, bump } = useGameStats('overlap')
+  const { stats, window: statsWindow, unconfirmedExp, bump } = useGameStats('overlap')
 
   useEffect(() => {
     setDiveUuid(undefined)
@@ -89,7 +89,7 @@ export default function OverlapGame({
           </button>
           <LevelBadge exp={user.exp} />
         </div>
-        <GameStatsBar game="overlap" stats={stats} window={statsWindow} />
+        <GameStatsBar game="overlap" stats={stats} window={statsWindow} unconfirmedExp={unconfirmedExp} />
         <h1>Glass Eel League — Finding Overlap</h1>
         <p className="game-flavor">
           A glass eel drifts in from the open ocean, scanning the coastline for familiar water.

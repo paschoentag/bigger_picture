@@ -34,7 +34,7 @@ export default function VerifyGame({
   const [error, setError] = useState<string | null>(null)
   const [reviewedCount, setReviewedCount] = useState(0)
   const [gridSize, setGridSize] = useState<GridSize>(0)
-  const { stats, window: statsWindow, bump } = useGameStats('verify')
+  const { stats, window: statsWindow, unconfirmedExp, bump } = useGameStats('verify')
 
   useEffect(() => {
     setDiveUuid(undefined)
@@ -98,7 +98,7 @@ export default function VerifyGame({
           </button>
           <LevelBadge exp={user.exp} />
         </div>
-        <GameStatsBar game="verify" stats={stats} window={statsWindow} />
+        <GameStatsBar game="verify" stats={stats} window={statsWindow} unconfirmedExp={unconfirmedExp} />
         <h1>Silver Eel League — Verification</h1>
         <p className="game-flavor">
           Before the long migration back to sea, a silver eel double-checks its bearings.
