@@ -160,6 +160,28 @@ export default function DatasetAdmin() {
       .finally(() => setPublishing(false))
   }
 
+  const handlePublishAll = async () => {
+    if (!diveUuid || publishing) return
+    setPublishing(true)
+    setPublishError(null)
+    try {
+      let totalPublished = 0
+      let remainingHidden: number
+      do {
+        const result = await publishCandidatePairs(diveUuid)
+        totalPublished += result.published
+        remainingHidden = result.remaining_hidden
+        if (result.published === 0) break
+      } while (remainingHidden > 0)
+      setPublishResult({ published: totalPublished, remaining_hidden: remainingHidden })
+      loadCandidatePairs()
+    } catch (err) {
+      setPublishError(err instanceof ApiError ? err.message : 'Could not publish candidate pairs.')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   useEffect(() => {
     if (!diveUuid) return
     fetchImagePairsForDive(diveUuid, pairsPage, PAGE_SIZE)
@@ -356,6 +378,14 @@ export default function DatasetAdmin() {
                   disabled={candidatesHiddenCount === 0 || publishing}
                 >
                   {publishing ? 'Publishing…' : `Publish up to 100 (${candidatesHiddenCount} hidden)`}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handlePublishAll}
+                  disabled={candidatesHiddenCount === 0 || publishing}
+                >
+                  {publishing ? 'Publishing…' : 'Publish all'}
                 </button>
               </div>
             </div>

@@ -69,15 +69,38 @@ export async function createImage(diveUuid: string, file: File): Promise<Dataset
   return res
 }
 
+export interface ImageZipImportResult {
+  created: number
+  skipped: number
+}
+
+/**
+ * Scientist only - real endpoint: POST /api/v1/dataset/images/zip-upload (multipart/form-data,
+ * fields "dive_uuid" and "file"). Every file in the zip is identified by its magic bytes; anything
+ * that isn't a recognized image format is skipped rather than erroring. An optional
+ * semicolon-delimited `images.csv` at the zip's root, with columns `filename` and `uuid`, assigns
+ * specific uuids to specific filenames - everything else gets a random uuid. All images are
+ * created with status "hidden".
+ */
+export function uploadImagesZip(diveUuid: string, zipFile: File): Promise<ImageZipImportResult> {
+  const formData = new FormData()
+  formData.append('dive_uuid', diveUuid)
+  formData.append('file', zipFile)
+  return apiFetch<ImageZipImportResult>('/api/v1/dataset/images/zip-upload', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export interface ImagesPage extends PaginatedResult<DatasetImage> {
+  hiddenCount: number
+}
+
 /** Scientist/admin only - real endpoint: GET /api/v1/dataset/images?dive={uuid}&page={page}&page_size={pageSize}. */
-export function fetchImagesForDive(
-  diveUuid: string,
-  page: number,
-  pageSize: number,
-): Promise<PaginatedResult<DatasetImage>> {
-  return apiFetch<{ images: DatasetImage[]; total: number }>(
+export function fetchImagesForDive(diveUuid: string, page: number, pageSize: number): Promise<ImagesPage> {
+  return apiFetch<{ images: DatasetImage[]; total: number; hidden_count: number }>(
     `/api/v1/dataset/images?dive=${diveUuid}&page=${page}&page_size=${pageSize}`,
-  ).then((res) => ({ items: res.images, total: res.total }))
+  ).then((res) => ({ items: res.images, total: res.total, hiddenCount: res.hidden_count }))
 }
 
 export interface CandidatePairsPage extends PaginatedResult<CandidatePairSummary> {
@@ -140,6 +163,19 @@ export interface PublishCandidatesResult {
 /** Scientist only - real endpoint: POST /api/v1/dataset/candidates/publish. Moves up to 100 hidden candidate pairs in the dive to "open", oldest first. Safe to call repeatedly. */
 export function publishCandidatePairs(diveUuid: string): Promise<PublishCandidatesResult> {
   return apiFetch<PublishCandidatesResult>('/api/v1/dataset/candidates/publish', {
+    method: 'POST',
+    body: JSON.stringify({ dive_uuid: diveUuid }),
+  })
+}
+
+export interface PublishImagesResult {
+  published: number
+  remaining_hidden: number
+}
+
+/** Scientist only - real endpoint: POST /api/v1/dataset/images/publish. Moves up to 100 hidden images in the dive to "open", oldest first. Safe to call repeatedly. */
+export function publishImages(diveUuid: string): Promise<PublishImagesResult> {
+  return apiFetch<PublishImagesResult>('/api/v1/dataset/images/publish', {
     method: 'POST',
     body: JSON.stringify({ dive_uuid: diveUuid }),
   })
