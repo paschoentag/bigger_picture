@@ -13,13 +13,11 @@ from src.api.v1.dataset._metadata import decode_metadata, encode_metadata
 from src.constants import IMAGE_STATUS_INT, INT_IMAGE_STATUS, ImageStatus
 from src.db import get_db
 from src.models.dataset import (
-    DivePublishRequest,
     ImageCreateRequest,
     ImageListResponse,
     ImageResponse,
     ImageUpdateRequest,
     ImageZipImportResponse,
-    PublishImagesResponse,
 )
 from src.schema.dives import Dive
 from src.schema.images import Image
@@ -33,8 +31,6 @@ from src.services.lookups import get_by_uuid, image_has_point_annotations
 from src.util import apply_partial_update
 
 router = APIRouter()
-
-PUBLISH_BATCH_SIZE = 100
 
 
 def _to_response(image: Image, db: Session) -> ImageResponse:
@@ -87,11 +83,6 @@ def list_images(
     total = db.execute(
         select(func.count()).select_from(Image).where(Image.dive_id == dive_id)
     ).scalar_one()
-    hidden_count = db.execute(
-        select(func.count())
-        .select_from(Image)
-        .where(Image.dive_id == dive_id, Image.status_id == IMAGE_STATUS_INT[ImageStatus.HIDDEN])
-    ).scalar_one()
     images = db.execute(
         select(Image)
         .where(Image.dive_id == dive_id)
@@ -99,9 +90,7 @@ def list_images(
         .limit(page_size)
         .offset((page - 1) * page_size)
     ).scalars().all()
-    return ImageListResponse(
-        images=[_to_response(image, db) for image in images], total=total, hidden_count=hidden_count
-    )
+    return ImageListResponse(images=[_to_response(image, db) for image in images], total=total)
 
 
 @router.post(
@@ -365,36 +354,3 @@ def batch_status_change(
 
     db.commit()
     return {"updated": len(images)}
-
-
-@router.post(
-    "/publish",
-    response_model=PublishImagesResponse,
-    summary="Publish Hidden Images",
-    description="""
-Move up to 100 hidden images in the given dive to status "open", oldest first. Requires the scientist role. Safe to call repeatedly to publish further batches.
-
-Fails with 404 if the dive does not exist.
-""",
-)
-def publish_images(payload: DivePublishRequest, request: Request, db: Session = Depends(get_db)):
-    require_current_user(request)
-    dive_id = _resolve_dive_id(db, payload.dive_uuid)
-
-    hidden_query = select(Image).where(
-        Image.dive_id == dive_id, Image.status_id == IMAGE_STATUS_INT[ImageStatus.HIDDEN]
-    )
-    images = db.execute(
-        hidden_query.order_by(Image.created_at).limit(PUBLISH_BATCH_SIZE)
-    ).scalars().all()
-
-    for image in images:
-        image.status_id = IMAGE_STATUS_INT[ImageStatus.OPEN]
-
-    db.commit()
-
-    remaining_hidden = db.execute(
-        select(func.count()).select_from(hidden_query.subquery())
-    ).scalar_one()
-
-    return PublishImagesResponse(published=len(images), remaining_hidden=remaining_hidden)

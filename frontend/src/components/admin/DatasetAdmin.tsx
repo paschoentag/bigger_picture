@@ -14,9 +14,8 @@ import {
   fetchImagePairsForDive,
   fetchImagesForDive,
   publishCandidatePairs,
-  publishImages,
 } from '../../api/datasetApi'
-import type { PublishCandidatesResult, PublishImagesResult, StrideCandidatePairResult } from '../../api/datasetApi'
+import type { PublishCandidatesResult, StrideCandidatePairResult } from '../../api/datasetApi'
 import { fetchDivesForRegion } from '../../api/diveApi'
 import { fetchRegions } from '../../api/regionApi'
 import type { AnnotationSummary, CandidatePairSummary, DatasetImage, Dive, ImagePairSummary, Region } from '../../api/types'
@@ -63,11 +62,7 @@ export default function DatasetAdmin() {
 
   const [images, setImages] = useState<DatasetImage[] | null>(null)
   const [imagesTotal, setImagesTotal] = useState(0)
-  const [imagesHiddenCount, setImagesHiddenCount] = useState(0)
   const [imagesPage, setImagesPage] = useState(1)
-  const [publishingImages, setPublishingImages] = useState(false)
-  const [publishImagesResult, setPublishImagesResult] = useState<PublishImagesResult | null>(null)
-  const [publishImagesError, setPublishImagesError] = useState<string | null>(null)
 
   const [candidates, setCandidates] = useState<CandidatePairSummary[] | null>(null)
   const [candidatesTotal, setCandidatesTotal] = useState(0)
@@ -114,10 +109,7 @@ export default function DatasetAdmin() {
   useEffect(() => {
     setImages(null)
     setImagesTotal(0)
-    setImagesHiddenCount(0)
     setImagesPage(1)
-    setPublishImagesResult(null)
-    setPublishImagesError(null)
     setCandidates(null)
     setCandidatesTotal(0)
     setCandidatesHiddenCount(0)
@@ -131,37 +123,14 @@ export default function DatasetAdmin() {
   const loadImages = () => {
     if (!diveUuid) return
     fetchImagesForDive(diveUuid, imagesPage, PAGE_SIZE)
-      .then(({ items, total, hiddenCount }) => {
+      .then(({ items, total }) => {
         setImages(items)
         setImagesTotal(total)
-        setImagesHiddenCount(hiddenCount)
       })
       .catch(() => setError('Could not load images for this dive.'))
   }
 
   useEffect(loadImages, [diveUuid, imagesPage])
-
-  const handlePublishAllImages = async () => {
-    if (!diveUuid || publishingImages) return
-    setPublishingImages(true)
-    setPublishImagesError(null)
-    try {
-      let totalPublished = 0
-      let remainingHidden = imagesHiddenCount
-      do {
-        const result = await publishImages(diveUuid)
-        totalPublished += result.published
-        remainingHidden = result.remaining_hidden
-        if (result.published === 0) break
-      } while (remainingHidden > 0)
-      setPublishImagesResult({ published: totalPublished, remaining_hidden: remainingHidden })
-      loadImages()
-    } catch (err) {
-      setPublishImagesError(err instanceof ApiError ? err.message : 'Could not publish images.')
-    } finally {
-      setPublishingImages(false)
-    }
-  }
 
   const loadCandidatePairs = () => {
     if (!diveUuid) return
@@ -189,6 +158,28 @@ export default function DatasetAdmin() {
         setPublishError(err instanceof ApiError ? err.message : 'Could not publish candidate pairs.')
       })
       .finally(() => setPublishing(false))
+  }
+
+  const handlePublishAll = async () => {
+    if (!diveUuid || publishing) return
+    setPublishing(true)
+    setPublishError(null)
+    try {
+      let totalPublished = 0
+      let remainingHidden: number
+      do {
+        const result = await publishCandidatePairs(diveUuid)
+        totalPublished += result.published
+        remainingHidden = result.remaining_hidden
+        if (result.published === 0) break
+      } while (remainingHidden > 0)
+      setPublishResult({ published: totalPublished, remaining_hidden: remainingHidden })
+      loadCandidatePairs()
+    } catch (err) {
+      setPublishError(err instanceof ApiError ? err.message : 'Could not publish candidate pairs.')
+    } finally {
+      setPublishing(false)
+    }
   }
 
   useEffect(() => {
@@ -328,30 +319,13 @@ export default function DatasetAdmin() {
           <section className="dataset-admin-section">
             <div className="dataset-admin-section-header">
               <h3>Images ({imagesTotal})</h3>
-              <div className="dataset-admin-section-actions">
-                <button type="button" className="btn" onClick={() => setUploadModalOpen(true)}>
-                  Upload images…
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={handlePublishAllImages}
-                  disabled={imagesHiddenCount === 0 || publishingImages}
-                >
-                  {publishingImages ? 'Publishing…' : `Publish all (${imagesHiddenCount} hidden)`}
-                </button>
-              </div>
+              <button type="button" className="btn" onClick={() => setUploadModalOpen(true)}>
+                Upload images…
+              </button>
             </div>
             {uploadResult !== null && (
               <p className="game-status">Uploaded {uploadResult} image(s).</p>
             )}
-            {publishImagesResult && (
-              <p className="game-status">
-                Published {publishImagesResult.published} image(s) ({publishImagesResult.remaining_hidden} still
-                hidden).
-              </p>
-            )}
-            {publishImagesError && <p className="game-status game-status-error">{publishImagesError}</p>}
             {images === null ? (
               <p className="game-status">Loading…</p>
             ) : (
@@ -404,6 +378,14 @@ export default function DatasetAdmin() {
                   disabled={candidatesHiddenCount === 0 || publishing}
                 >
                   {publishing ? 'Publishing…' : `Publish up to 100 (${candidatesHiddenCount} hidden)`}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handlePublishAll}
+                  disabled={candidatesHiddenCount === 0 || publishing}
+                >
+                  {publishing ? 'Publishing…' : 'Publish all'}
                 </button>
               </div>
             </div>
