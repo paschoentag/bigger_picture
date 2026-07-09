@@ -697,3 +697,10 @@ class DatasetImportResponse(BaseModel):
     created: DatasetImportCounts = Field(
         description="Per-entity created counts. Newly minted uuids (from rows using uuid \"new\") are not echoed back - reference them by title in later rows of the same import instead."
     )
+
+
+class ImageZipImportResponse(BaseModel):
+    """Result of a successful images-only zip import into a single dive."""
+
+    created: int = Field(description="Number of images created.")
+    skipped: int = Field(description="Number of non-image files in the zip that were ignored.")
