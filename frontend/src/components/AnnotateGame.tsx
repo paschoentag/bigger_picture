@@ -48,7 +48,7 @@ export default function AnnotateGame({
   const [pending, setPending] = useState<{ side: 'A' | 'B'; point: NormalizedPoint } | null>(null)
   const [showHints, setShowHints] = useState(true)
   const [gridSize, setGridSize] = useState<GridSize>(0)
-  const { stats, window: statsWindow, bump } = useGameStats('annotate')
+  const { stats, window: statsWindow, unconfirmedExp, bump } = useGameStats('annotate')
   const imageARef = useRef<HTMLImageElement>(null)
   const imageBRef = useRef<HTMLImageElement>(null)
 
@@ -149,7 +149,7 @@ export default function AnnotateGame({
           </button>
           <LevelBadge exp={user.exp} />
         </div>
-        <GameStatsBar game="annotate" stats={stats} window={statsWindow} />
+        <GameStatsBar game="annotate" stats={stats} window={statsWindow} unconfirmedExp={unconfirmedExp} />
         <h1>Yellow Eel League — Annotating</h1>
         <p className="game-flavor">
           For years, a yellow eel learns every rock and reed of its river home by heart.

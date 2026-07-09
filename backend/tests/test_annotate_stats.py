@@ -242,3 +242,26 @@ def test_overall_pairs_with_overlap_is_global(client, dataset, ann, login_as):
 def test_window_less_than_one_is_422(client, dataset, ann):
     resp = client.get("/api/v1/annotate/stats/me?window=0")
     assert resp.status_code == 422, resp.text
+
+
+def test_unconfirmed_exp_tracks_pending_submissions(client, dataset, ann, login_as):
+    from src import config
+
+    imgs = dataset["images"]
+    # Two pending point annotations and one pending overlap vote.
+    p_keep = _point(client, imgs[0], imgs[1])
+    p_approve = _point(client, imgs[0], imgs[1])
+    v_fail = _vote(client, imgs[0], imgs[1], no_overlap=False)
+
+    expected = 2 * config.POINT_ANNOTATION_REVIEW_EXP + config.CANDIDATE_ANNOTATION_REVIEW_EXP
+    assert _get_stats(client)["unconfirmed_exp"] == expected
+
+    # Once reviewed (approved or failed) a submission is no longer pending, so its
+    # potential exp drops out of the unconfirmed total.
+    login_as(dataset["scientist"])
+    _review_point(client, p_approve, "approve")
+    _review_candidate(client, v_fail, "fail")
+
+    login_as(ann)
+    assert _get_stats(client)["unconfirmed_exp"] == config.POINT_ANNOTATION_REVIEW_EXP  # only p_keep remains
+    assert p_keep  # retained for clarity that it is the still-pending annotation

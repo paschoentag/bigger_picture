@@ -39,6 +39,11 @@
   content: ':';
 }
 
+/* Pending (unconfirmed) XP is highlighted green to read as a gain-in-waiting. */
+.stat-chip-pending .stat-chip-value {
+  color: #1f9d55;
+}
+
 /* Secondary stats float down over the content below without shifting it. */
 .game-stats-more {
   position: absolute;

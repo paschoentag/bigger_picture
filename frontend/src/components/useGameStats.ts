@@ -19,7 +19,9 @@ export interface UseGameStats<G extends GameId> {
   stats: GameSlice<G> | null
   /** Window size backing the recent-accuracy stats, or null before load. */
   window: number | null
-  /** Optimistically add integer deltas to this game's counters. */
+  /** Exp pending confirmation from other players' reviews, or null before load. */
+  unconfirmedExp: number | null
+  /** Optimistically add integer deltas to this game's counters, then reconcile from the server. */
   bump: (deltas: StatDeltas<G>) => void
 }
 
@@ -45,6 +47,7 @@ export function useGameStats<G extends GameId>(game: G): UseGameStats<G> {
 
   const bump = useCallback(
     (deltas: StatDeltas<G>) => {
+      // Apply the delta immediately for snappy "+N" feedback...
       setStats((prev) => {
         if (!prev) return prev
         const nextSlice = { ...prev[game] } as Record<string, unknown>
@@ -56,6 +59,10 @@ export function useGameStats<G extends GameId>(game: G): UseGameStats<G> {
         }
         return { ...prev, [game]: nextSlice as unknown as GameSlice<G> }
       })
+      // ...then reconcile with the server, which also refreshes unconfirmed exp.
+      fetchMyStats()
+        .then(setStats)
+        .catch(() => {})
     },
     [game],
   )
@@ -63,6 +70,7 @@ export function useGameStats<G extends GameId>(game: G): UseGameStats<G> {
   return {
     stats: stats ? (stats[game] as GameSlice<G>) : null,
     window: stats ? stats.window : null,
+    unconfirmedExp: stats ? stats.unconfirmed_exp : null,
     bump,
   }
 }

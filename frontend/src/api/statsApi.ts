@@ -43,6 +43,8 @@ export interface VerifyStats {
 /** Mirrors `MyStatsResponse` from `backend/src/models/annotate.py`. */
 export interface MyStats {
   window: number
+  /** Exp the player will gain once their pending (unreviewed) submissions are approved. */
+  unconfirmed_exp: number
   overlap: OverlapStats
   annotate: AnnotateStats
   verify: VerifyStats

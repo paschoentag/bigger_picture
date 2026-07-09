@@ -49,7 +49,13 @@ function buildDescriptors(game: GameId, slice: GameSlice, window: number | null)
 }
 
 /** A single stat with a hover tooltip and a green "+N" animation when its counter increases. */
-function StatChip({ label, tooltip, value, text }: Omit<StatDescriptor, 'key' | 'tier'>) {
+function StatChip({
+  label,
+  tooltip,
+  value,
+  text,
+  className,
+}: Omit<StatDescriptor, 'key' | 'tier'> & { className?: string }) {
   const prev = useRef<number | null>(null)
   const nextId = useRef(0)
   const [bumps, setBumps] = useState<{ id: number; amount: number }[]>([])
@@ -65,7 +71,7 @@ function StatChip({ label, tooltip, value, text }: Omit<StatDescriptor, 'key' | 
   }, [value])
 
   return (
-    <span className="stat-chip" tabIndex={0}>
+    <span className={className ? `stat-chip ${className}` : 'stat-chip'} tabIndex={0}>
       <span className="stat-chip-value">
         {text ?? value}
         {bumps.map((b) => (
@@ -86,15 +92,26 @@ function StatChip({ label, tooltip, value, text }: Omit<StatDescriptor, 'key' | 
   )
 }
 
+/**
+ * How and when experience changes — shown as the tooltip on the pending-XP chip so
+ * players understand why the number moves (and why it isn't instant).
+ */
+const EXP_EXPLANATION =
+  'XP is only confirmed once other players review your work. You gain XP each time you review ' +
+  "someone's submission, and again when your own overlap votes and annotations are approved. " +
+  "Pending XP is what you'll earn once your current submissions are confirmed."
+
 /** Compact strip of a single game's own stats, shown under the experience bar. */
 export function GameStatsBar({
   game,
   stats,
   window,
+  unconfirmedExp,
 }: {
   game: GameId
   stats: GameSlice | null
   window: number | null
+  unconfirmedExp: number | null
 }) {
   const [expanded, setExpanded] = useState(false)
   if (!stats) return null
@@ -106,6 +123,15 @@ export function GameStatsBar({
   return (
     <div className="game-stats-bar">
       <div className="game-stats-row">
+        {unconfirmedExp !== null && (
+          <StatChip
+            className="stat-chip-pending"
+            label="Pending XP"
+            tooltip={EXP_EXPLANATION}
+            value={unconfirmedExp}
+            text={`+${unconfirmedExp}`}
+          />
+        )}
         {primary.map((d) => (
           <StatChip key={d.key} label={d.label} tooltip={d.tooltip} value={d.value} text={d.text} />
         ))}
