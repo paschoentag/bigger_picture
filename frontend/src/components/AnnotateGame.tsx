@@ -16,6 +16,7 @@ import FunFactModal from './FunFactModal'
 import { Marker } from './Marker'
 import { markerColor } from './markerColor'
 import { ZoomLens } from './ZoomLens'
+import { useCoarsePointer } from './useCoarsePointer'
 import './AnnotateGame.css'
 
 const MIN_CORRESPONDENCES = 4
@@ -70,15 +71,17 @@ export default function AnnotateGame({
   const { fact, recordCompletion, dismiss } = useFunFactTrigger(region.uuid)
   const imageARef = useRef<HTMLImageElement>(null)
   const imageBRef = useRef<HTMLImageElement>(null)
+  const isCoarsePointer = useCoarsePointer()
 
   useEffect(() => {
+    if (isCoarsePointer) return
     setDiveUuid(undefined)
     setLoading(true)
     setError(null)
     fetchDivesForRegion(region.uuid)
       .then((dives) => setDiveUuid(dives[0]?.uuid ?? null))
       .catch(() => setError('Could not load dive imagery for this region. Please try again.'))
-  }, [region.uuid])
+  }, [region.uuid, isCoarsePointer])
 
   const loadNextPair = useCallback((forDiveUuid: string) => {
     setLoading(true)
@@ -234,16 +237,23 @@ export default function AnnotateGame({
         <p className="game-region">Region: {region.title}</p>
       </header>
 
-      {loading && <p className="game-status">Loading image pair…</p>}
-      {error && <p className="game-status game-status-error">{error}</p>}
-      {!loading && !error && diveUuid === null && (
+      {isCoarsePointer && (
+        <p className="game-status">
+          Annotating needs a mouse or trackpad for precise point placement — it isn't available on touch
+          devices. Try Finding Overlap or Verification instead, or come back on a laptop or desktop.
+        </p>
+      )}
+
+      {!isCoarsePointer && loading && <p className="game-status">Loading image pair…</p>}
+      {!isCoarsePointer && error && <p className="game-status game-status-error">{error}</p>}
+      {!isCoarsePointer && !loading && !error && diveUuid === null && (
         <p className="game-status">No dive imagery is available for this region yet.</p>
       )}
-      {!loading && !error && diveUuid && done && (
+      {!isCoarsePointer && !loading && !error && diveUuid && done && (
         <p className="game-status">No more pairs to annotate in this region right now — nice work!</p>
       )}
 
-      {pair && !loading && (
+      {!isCoarsePointer && pair && !loading && (
         <>
           <div className="image-toolbar">
             <button type="button" className="btn" onClick={() => setGridSize(nextGridSize(gridSize))}>

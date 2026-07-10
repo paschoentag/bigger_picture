@@ -5,6 +5,7 @@ import { fetchNextCandidatePair } from '../api/overlapApi'
 import type { Region, User } from '../api/types'
 import { fetchNextPendingVerification } from '../api/verifyApi'
 import AccountBar from './AccountBar'
+import { useCoarsePointer } from './useCoarsePointer'
 import './HomeScreen.css'
 import glass_eel_2 from '../../images/glass_eel_2.png'
 import yellow_eel from '../../images/yellow_eel.png'
@@ -85,6 +86,7 @@ export default function HomeScreen({
   // player may have already worked through them), so we probe each game the same
   // way the game screen does — resolve a dive, then ask that stage's "next" endpoint.
   const [availability, setAvailability] = useState<Record<GameId, boolean> | undefined>(undefined)
+  const isCoarsePointer = useCoarsePointer()
 
   const [expandedCards, setExpandedCards] = useState<Record<GameId, boolean>>({
     overlap: false,
@@ -161,8 +163,9 @@ export default function HomeScreen({
         {GAMES.map((game) => {
           // `undefined` availability = still probing; treat as playable so the
           // buttons don't flash disabled on every home visit.
-          const noData = game.active && availability?.[game.id] === false
-          const disabled = !game.active || noData
+          const touchLocked = game.id === 'annotate' && isCoarsePointer
+          const noData = game.active && !touchLocked && availability?.[game.id] === false
+          const disabled = !game.active || noData || touchLocked
           return (
             <article
               className={`game-card${disabled ? ' game-card-locked' : ''}${noData ? ' game-card-nodata' : ''}`}
@@ -191,13 +194,16 @@ export default function HomeScreen({
                 className="game-card-image"
               />
               <p>{game.description}</p>
+              {touchLocked && (
+                <p className="game-card-note">Needs a mouse or trackpad for precise point placement.</p>
+              )}
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={disabled}
                 onClick={() => onPlay(game.id)}
               >
-                {!game.active ? 'Coming soon' : noData ? 'No data yet' : 'Play'}
+                {!game.active ? 'Coming soon' : touchLocked ? 'Needs mouse/trackpad' : noData ? 'No data yet' : 'Play'}
               </button>
               {noData && (
                 <span className="game-card-tooltip" role="tooltip">

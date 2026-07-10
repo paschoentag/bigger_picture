@@ -198,6 +198,13 @@
   flex-grow: 0;
 }
 
+.game-card-note {
+  font-size: 0.8rem;
+  color: var(--text);
+  opacity: 0.75;
+  flex-grow: 0;
+}
+
 .game-card button {
   margin-top: 8px;
 }
