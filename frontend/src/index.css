@@ -283,6 +283,12 @@ h2 {
   gap: 16px;
 }
 
+@media (max-width: 480px) {
+  .game-screen {
+    padding: 20px 12px 32px;
+  }
+}
+
 /* Gentle per-league accent, echoing the game-select cards (see HomeScreen.css). */
 .game-screen[data-game='overlap'] {
   --game-accent: var(--accent-overlap);
@@ -404,6 +410,15 @@ h2 {
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--pane-border);
+}
+
+@media (max-width: 480px) {
+  /* Below this width even the 280px min-width can exceed the available
+     content area once game-screen padding is subtracted, causing horizontal
+     overflow. Forcing full-width panes guarantees a clean single column. */
+  .image-pane {
+    min-width: 100%;
+  }
 }
 
 .image-pane img {
