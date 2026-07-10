@@ -62,7 +62,7 @@ export default function AnnotateGame({
   const [error, setError] = useState<string | null>(null)
   const [correspondences, setCorrespondences] = useState<Correspondence[]>([])
   const [pending, setPending] = useState<{ side: 'A' | 'B'; point: NormalizedPoint } | null>(null)
-  const { show: showTutorial, complete: completeTutorial } = useTutorial('annotate')
+  const { show: showTutorial, complete: completeTutorial , open: openTutorial,} = useTutorial('annotate')
   const [gridSize, setGridSize] = useState<GridSize>(0)
   const [zoomPoint, setZoomPoint] = useState<{side: 'A' | 'B'; point: NormalizedPoint} | null>(null)
   const [cursorPosition, setCursorPosition] = useState<{x: number; y: number} | null>(null)
@@ -232,7 +232,7 @@ export default function AnnotateGame({
           <button
             type="button"
             className="info-button"
-            onClick={() => setShowHints(true)}
+            onClick={openTutorial}
             aria-label="More information about annotation"
           >
             i
