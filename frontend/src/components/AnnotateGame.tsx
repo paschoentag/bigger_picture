@@ -224,8 +224,15 @@ export default function AnnotateGame({
           For years, a yellow eel learns every rock and reed of its river home by heart.
         </p>
         <p>
-          Click a point in either image, then click the same physical spot in the other image.
-          Repeat for at least {MIN_CORRESPONDENCES} points, then submit.
+          Select at least {MIN_CORRESPONDENCES} corresponding points for the image pair.
+          <button
+            type="button"
+            className="info-button"
+            onClick={() => setShowHints(true)}
+            aria-label="More information about annotation"
+          >
+            i
+          </button>
         </p>
         <p className="game-region">Region: {region.title}</p>
       </header>
