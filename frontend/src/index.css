@@ -100,6 +100,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 16px;
   font-size: 12px;
 }
@@ -163,6 +165,13 @@ h2 {
   cursor: pointer;
 }
 
+@media (pointer: coarse) {
+  .burger-menu-toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .burger-menu-toggle:hover {
   background: var(--pane-border);
 }
@@ -182,6 +191,8 @@ h2 {
   display: flex;
   flex-direction: column;
   min-width: 140px;
+  max-height: min(60vh, 320px);
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--pane-border);
   border-radius: 8px;
@@ -199,6 +210,12 @@ h2 {
   background: none;
   color: var(--text-h);
   cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .burger-menu-dropdown button {
+    padding: 12px 10px;
+  }
 }
 
 .burger-menu-dropdown button:hover {
@@ -226,6 +243,12 @@ h2 {
   overflow: hidden;
 }
 
+@media (max-width: 480px) {
+  .level-badge-bar {
+    width: 48px;
+  }
+}
+
 .level-badge-bar-fill {
   display: block;
   height: 100%;
@@ -241,6 +264,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 12px;
   margin-bottom: 12px;
 }
