@@ -34,6 +34,10 @@ export function useTutorial(game: GameId) {
     }
   }, [game])
 
+  const open = () => {
+    setShow(true)
+  }
+
   const complete = () => {
     setShow(false)
     const seen = storyRef.current?.tutorialsSeen ?? []
@@ -45,5 +49,5 @@ export function useTutorial(game: GameId) {
     })
   }
 
-  return { show, complete }
+  return { show, complete, open }
 }
