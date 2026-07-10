@@ -505,7 +505,11 @@ def get_next_candidates(dive_uuid: UUID, request: Request, n: int = 1, db: Sessi
             Image2.dive_id == dive.id,
             CandidatePair.id.notin_(annotated_candidate_ids),
         )
-        .order_by(CandidatePair.id.asc())
+        # id as a tiebreaker: batch creation (e.g. stride create) can assign many
+        # rows the same created_at millisecond, which would otherwise make the
+        # pool's boundary non-deterministic and break the stable-pool property
+        # sample_pool() depends on.
+        .order_by(CandidatePair.created_at.asc(), CandidatePair.id.asc())
     )
     candidates = sample_pool(db, stmt, n)
     return [_to_next_candidate_response(candidate, db) for candidate in candidates]
