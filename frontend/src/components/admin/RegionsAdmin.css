@@ -46,3 +46,12 @@
   border: 1px solid var(--pane-border);
   background: #000;
 }
+
+.regions-admin-dives {
+  border-top: 1px solid var(--pane-border);
+  padding-top: 24px;
+}
+
+.regions-admin-dives h3 {
+  margin: 0 0 16px;
+}

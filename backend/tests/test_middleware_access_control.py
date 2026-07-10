@@ -16,7 +16,10 @@ def test_anonymous_gets_401_on_protected_paths(client):
 
 
 def test_anonymous_can_reach_public_paths(client):
-    assert client.post("/api/v1/auth/signup", json={"username": "pub"}).status_code == 201
+    resp = client.post(
+        "/api/v1/auth/signup", json={"username": "pub", "password": "correct horse battery staple"}
+    )
+    assert resp.status_code == 201
     assert client.get("/assets/").status_code not in (401, 403)
 
 

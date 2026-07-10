@@ -12,6 +12,8 @@ import { useFunFactTrigger } from './useFunFactTrigger'
 import FunFactModal from './FunFactModal'
 import { Marker } from './Marker'
 import { markerColor } from './markerColor'
+import TutorialModal from './tutorials/TutorialModal'
+import { useTutorial } from './tutorials/useTutorial'
 
 type PointStatus = 'approved' | 'flagged'
 
@@ -23,6 +25,7 @@ export default function VerifyGame({
   onOpenAdmin,
   onOpenStats,
   onOpenQuests,
+  onOpenCommunityStats,
   onOpenLeaderboard,
   onLogout,
 }: {
@@ -33,6 +36,7 @@ export default function VerifyGame({
   onOpenAdmin: () => void
   onOpenStats: () => void
   onOpenQuests: () => void
+  onOpenCommunityStats: () => void
   onOpenLeaderboard: () => void
   onLogout: () => void
 }) {
@@ -50,6 +54,7 @@ export default function VerifyGame({
   const [gridSize, setGridSize] = useState<GridSize>(0)
   const { stats, window: statsWindow, bump } = useGameStats('verify')
   const { fact, recordCompletion, dismiss } = useFunFactTrigger(region.uuid)
+  const { show: showTutorial, complete: completeTutorial } = useTutorial('verify')
 
   useEffect(() => {
     setDiveUuid(undefined)
@@ -152,6 +157,7 @@ export default function VerifyGame({
   return (
     <div className="game-screen" data-game="verify">
       {fact && <FunFactModal fact={fact} onDismiss={dismiss} />}
+      {showTutorial && <TutorialModal game="verify" onComplete={completeTutorial} />}
       <header className="game-header">
         <div className="game-header-top">
           <button type="button" className="back-link" onClick={onBack}>
@@ -162,6 +168,7 @@ export default function VerifyGame({
             onOpenAdmin={onOpenAdmin}
             onOpenStats={onOpenStats}
             onOpenQuests={onOpenQuests}
+            onOpenCommunityStats={onOpenCommunityStats}
             onOpenLeaderboard={onOpenLeaderboard}
             onLogout={onLogout}
           />

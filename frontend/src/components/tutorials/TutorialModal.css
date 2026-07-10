@@ -1,0 +1,32 @@
+/* Deck-specific styling for the paged TutorialModal. Shared backdrop/card/
+   scene rules live in tutorialShell.css. */
+.tut-tips {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tut-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.tut-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pane-border);
+}
+
+.tut-dot-active {
+  background: var(--tut-accent, var(--text-h));
+}
+
+.tut-progress {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--text);
+}

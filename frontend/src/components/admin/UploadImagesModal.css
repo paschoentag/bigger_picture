@@ -1,0 +1,12 @@
+.upload-images-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(227, 73, 72, 0.12);
+  border: 1px solid rgba(227, 73, 72, 0.4);
+  color: #e34948;
+  font-size: 0.9rem;
+  text-align: left;
+}

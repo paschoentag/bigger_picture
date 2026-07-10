@@ -12,7 +12,7 @@ from src.db import get_db
 from src.models.admin import UserCreateRequest, UserUpdateRequest
 from src.models.auth import UserResponse
 from src.password_auth.hashing import hash_password
-from src.password_auth.store import delete_password_hash, has_password, set_password_hash
+from src.password_auth.store import has_password, set_password_hash
 from src.schema.users import User
 from src.util import apply_partial_update, now_ms
 
@@ -40,7 +40,7 @@ Create a new user with the given uuid, username, and role. Requires the admin ro
 
 expert_level is read-only, derived from exp; any value supplied for it is ignored and the new user always starts at expert_level 0.
 
-`password` is required when role is scientist or admin, and must be omitted when role is annotator - annotator accounts never have a password (422 otherwise).
+`password` is required for every new user, regardless of role.
 
 Fails with 409 if the uuid or username (case-insensitively) is already taken.
 """,
@@ -63,8 +63,7 @@ def create_user(payload: UserCreateRequest, request: Request, db: Session = Depe
         raise HTTPException(status_code=409, detail="Username or uuid already taken")
     db.refresh(user)
 
-    if payload.password is not None:
-        set_password_hash(config.AUTH_DATABASE_PATH, user.uuid, hash_password(payload.password))
+    set_password_hash(config.AUTH_DATABASE_PATH, user.uuid, hash_password(payload.password))
 
     return _to_response(user)
 
@@ -78,7 +77,7 @@ Partially update an existing user, identified by uuid. Requires the admin role.
 
 Only the fields supplied in the request are changed; omitted fields are left as-is. Sending an explicit null for username or role is also a no-op. expert_level is read-only, derived from exp; any value supplied for it (null or not) is ignored.
 
-`password` sets/replaces the stored credential. It is rejected (422) if the account's resulting role is annotator, and required (422) if the resulting role is scientist/admin and the account has no credential yet (first-time promotion). Demoting to annotator always deletes any stored credential.
+`password` sets/replaces the stored credential, for any role. It is required (422) if the resulting role is scientist/admin and the account has no credential yet (first-time promotion). Changing role never touches an existing stored credential on its own - this is the mechanism for an admin to unlock a legacy annotator account by setting its first password.
 
 Fails with 404 if the uuid is not found, or 409 if the new username is already taken (case-insensitively).
 """,
@@ -101,8 +100,6 @@ def update_user(payload: UserUpdateRequest, request: Request, db: Session = Depe
     final_role = updates.get("role", user.role)
     password_requested = "password" in payload.model_fields_set and payload.password is not None
 
-    if final_role == Role.ANNOTATOR and password_requested:
-        raise HTTPException(status_code=422, detail="password is not allowed for annotator accounts")
     if (
         final_role != Role.ANNOTATOR
         and not password_requested
@@ -123,9 +120,7 @@ def update_user(payload: UserUpdateRequest, request: Request, db: Session = Depe
         raise HTTPException(status_code=409, detail="Username already taken")
     db.refresh(user)
 
-    if final_role == Role.ANNOTATOR:
-        delete_password_hash(config.AUTH_DATABASE_PATH, user.uuid)
-    elif password_requested:
+    if password_requested:
         set_password_hash(config.AUTH_DATABASE_PATH, user.uuid, hash_password(payload.password))
 
     return _to_response(user)

@@ -43,15 +43,17 @@ export function AccuracyGauge({ caption, stat }: { caption: string; stat: Accura
 }
 
 /**
- * Horizontal bar splitting a whole into two real categories, with a 2px
- * surface gap between the fills and a labelled legend below. The first
- * segment takes the accent; the second a pale tint of the same hue so the
- * split reads as one family, primary vs secondary.
+ * Horizontal bar splitting a whole into two or three real categories, with a
+ * 2px surface gap between the fills and a labelled legend below. Segment 0
+ * takes the full accent, segment 1 a pale tint of the same hue (so a 2-way
+ * split reads as one family, primary vs secondary), and an optional segment 2
+ * a neutral gray - for the common "resolved positive / resolved negative /
+ * still pending" shape, where pending isn't part of the accent's hue family.
  */
 export function SplitBar({
   segments,
 }: {
-  segments: [{ label: string; value: number }, { label: string; value: number }]
+  segments: { label: string; value: number }[]
 }) {
   const total = segments[0].value + segments[1].value
 
@@ -118,6 +120,45 @@ export function ProgressMeter({
       >
         <div className="stat-meter-fill" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  )
+}
+
+/** One row of a `StageBarChart`: a game stage's raw activity count. */
+export interface StageActivityDatum {
+  /** Selects the bar's fill color - one of the three fixed per-game accents. */
+  game: 'overlap' | 'annotate' | 'verify'
+  label: string
+  value: number
+}
+
+/**
+ * Horizontal bar chart comparing raw activity across the three game stages on
+ * one shared scale (magnitude, not part-of-whole - bars don't sum to a
+ * total). Each row is directly labelled with its own name and value, so
+ * identity never depends on picking the right hue out of the three accents.
+ */
+export function StageActivityChart({ data }: { data: StageActivityDatum[] }) {
+  const max = Math.max(1, ...data.map((d) => d.value))
+
+  return (
+    <div className="stage-bars">
+      {data.map((d) => (
+        <div className="stage-bar-row" key={d.game}>
+          <span className="stage-bar-label">{d.label}</span>
+          <div
+            className="stage-bar-track"
+            role="img"
+            aria-label={`${d.label}: ${d.value}`}
+          >
+            <div
+              className={`stage-bar-fill stage-bar-fill-${d.game}`}
+              style={{ width: `${(d.value / max) * 100}%` }}
+            />
+          </div>
+          <span className="stage-bar-value">{d.value.toLocaleString()}</span>
+        </div>
+      ))}
     </div>
   )
 }

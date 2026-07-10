@@ -21,6 +21,7 @@ export default function MyStatsScreen({
   onOpenAdmin,
   onOpenStats,
   onOpenQuests,
+  onOpenCommunityStats,
   onOpenLeaderboard,
   onLogout,
 }: {
@@ -29,6 +30,7 @@ export default function MyStatsScreen({
   onOpenAdmin: () => void
   onOpenStats: () => void
   onOpenQuests: () => void
+  onOpenCommunityStats: () => void
   onOpenLeaderboard: () => void
   onLogout: () => void
 }) {
@@ -53,6 +55,7 @@ export default function MyStatsScreen({
             onOpenAdmin={onOpenAdmin}
             onOpenStats={onOpenStats}
             onOpenQuests={onOpenQuests}
+            onOpenCommunityStats={onOpenCommunityStats}
             onOpenLeaderboard={onOpenLeaderboard}
             onLogout={onLogout}
           />

@@ -65,11 +65,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         request.state.user = user
 
-        # Scoped to the resolved user's role, not the endpoint's role
-        # requirement, so it covers every mutating request a scientist/admin
-        # session makes - including /api/v1/auth/password, which is publicly
-        # reachable per _PATH_ROLE_REQUIREMENTS but internally role-gated.
-        if user is not None and user.role != Role.ANNOTATOR and request.method in _UNSAFE_METHODS:
+        # Scoped to any resolved user, not the endpoint's role requirement, so
+        # it covers every mutating request any authenticated session makes -
+        # including /api/v1/auth/password, which is publicly reachable per
+        # _PATH_ROLE_REQUIREMENTS but internally requires a session.
+        if user is not None and request.method in _UNSAFE_METHODS:
             header_token = request.headers.get(CSRF_HEADER_NAME)
             if not verify_csrf_token(user.uuid, header_token):
                 return JSONResponse({"detail": "Missing or invalid CSRF token"}, status_code=403)

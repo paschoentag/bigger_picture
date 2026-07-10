@@ -123,6 +123,7 @@ def _zip_from_response(resp) -> zipfile.ZipFile:
 
 _EXPORT_GET_URLS = [
     "/api/v1/dataset/export/full",
+    "/api/v1/dataset/export/full-csv-only",
     "/api/v1/dataset/export/points-flat",
     "/api/v1/dataset/export/candidates-flat",
     "/api/v1/dataset/export/fun-facts",
@@ -300,6 +301,32 @@ def test_export_full_dataset_zip_contains_all_tables_and_assets(client, scientis
         candidate_annotations_csv[0]["candidate_image2_uuid"],
     } == {img_a, img_b}
     assert "candidate_uuid" not in candidate_annotations_csv[0]
+
+
+def test_export_full_dataset_csv_only_zip_excludes_asset_folders(client, scientist):
+    dive = _make_dive(client, title="full-csv-dive")
+    img_a = _make_image(client, dive, "full_csv_a.png")
+    img_b = _make_image(client, dive, "full_csv_b.png")
+    _open_pair(client, img_a, img_b)
+    _create_fun_fact(client, "full-csv-only-fact", with_image=True)
+
+    resp = client.get("/api/v1/dataset/export/full-csv-only")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"] == "application/zip"
+
+    zf = _zip_from_response(resp)
+    names = zf.namelist()
+    expected_csvs = {
+        "users.csv", "labels.csv", "cameras.csv", "regions.csv", "dives.csv", "images.csv",
+        "image_pairs.csv", "candidate_pairs.csv", "point_annotations.csv", "candidate_annotations.csv",
+        "fun_facts.csv", "helper_images.csv", "seen_facts.csv", "quest_claims.csv",
+    }
+    assert expected_csvs.issubset(set(names))
+    assert not any(name.startswith("images/") for name in names)
+    assert not any(name.startswith("helper_images/") for name in names)
+
+    images_csv = list(csv.DictReader(io.StringIO(zf.read("images.csv").decode())))
+    assert {row["uuid"] for row in images_csv} == {img_a, img_b}
 
 
 def test_full_dataset_export_covers_every_schema_table(client, scientist):

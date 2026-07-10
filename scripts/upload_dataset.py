@@ -26,9 +26,11 @@ re-run. Override its location with --state-file.
 Authentication needs a user with the `scientist` or `admin` role (the
 /api/v1/dataset/* routes require it). Two ways to authenticate:
 
-  --username NAME     log in as an existing user via POST /api/v1/auth/login
-                      (no password); the session cookie is captured from the
-                      response. Also reads $UPLOAD_USERNAME.
+  --username NAME     log in as an existing user via POST /api/v1/auth/login;
+                      the session cookie is captured from the response. Also
+                      reads $UPLOAD_USERNAME. Scientist/admin accounts require
+                      a password too - pass --password or set $UPLOAD_PASSWORD
+                      (annotator accounts have none and ignore it).
   --session-uuid HEX  use a raw session cookie value directly (e.g. the hex
                       string printed by `python -m src.bootstrap_admin`). Also
                       reads $SESSION_UUID.
@@ -63,6 +65,12 @@ from urllib import error, request
 
 DEFAULT_BASE_URL = "http://localhost:8000"
 COOKIE_NAME = "session_uuid"
+# Scientist/admin sessions also get a non-httponly CSRF cookie (see
+# backend/src/csrf.py), which must be echoed back as this header on every
+# state-changing request. Annotator sessions never receive one and are exempt.
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 FILES_FILENAME_KEYS = ("filename",)
 FILES_UUID_KEYS = ("uuid",)
@@ -82,15 +90,18 @@ class ApiClient:
     """Minimal stdlib HTTP client that carries the auth cookie on every call.
 
     The `session_uuid` cookie may be supplied up front (a raw hex value) or
-    obtained by `login()`. Every response is scanned for a `Set-Cookie` header,
-    so the cookie the server issues at login is captured automatically - the
-    `httponly` flag only hides it from browser JavaScript, not from a raw HTTP
-    client like this one.
+    obtained by `login()`. Every response is scanned for `Set-Cookie` headers,
+    so both the session cookie the server issues at login and the scientist/
+    admin CSRF cookie are captured automatically - the `httponly` flag only
+    hides the session cookie from browser JavaScript, not from a raw HTTP
+    client like this one. The captured CSRF token is echoed back as
+    X-CSRF-Token on every state-changing request, as the frontend does.
     """
 
     def __init__(self, base_url: str, session_uuid: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.session_uuid = session_uuid
+        self.csrf_token: str | None = None
 
     def _capture_cookie(self, headers) -> None:
         for raw in headers.get_all("Set-Cookie", []):
@@ -98,12 +109,16 @@ class ApiClient:
             jar.load(raw)
             if COOKIE_NAME in jar:
                 self.session_uuid = jar[COOKIE_NAME].value
+            if CSRF_COOKIE_NAME in jar:
+                self.csrf_token = jar[CSRF_COOKIE_NAME].value
 
     def _request(self, method: str, path: str, body=None):
         url = f"{self.base_url}{path}"
         headers = {}
         if self.session_uuid:
             headers["Cookie"] = f"{COOKIE_NAME}={self.session_uuid}"
+        if method.upper() not in SAFE_METHODS and self.csrf_token:
+            headers[CSRF_HEADER_NAME] = self.csrf_token
         data = None
         if body is not None:
             data = json.dumps(body).encode()
@@ -125,15 +140,36 @@ class ApiClient:
     def post(self, path: str, body):
         return self._request("POST", path, body)
 
-    def login(self, username: str) -> dict:
-        """Log in by username (no password) and capture the session cookie.
+    def refresh_csrf_token(self) -> dict:
+        """GET /api/v1/auth/me to (re)capture the CSRF cookie for the current session.
 
-        Returns the user record (includes `role`). Raises SystemExit on an
-        unknown username or any non-200 response.
+        Needed when the session was supplied as a raw --session-uuid rather than
+        obtained via login() - the CSRF cookie is only ever set by the login/
+        signup/me responses, never assumed from a bare session cookie. A no-op
+        for annotator sessions, which never receive a CSRF cookie. Returns the
+        user record; raises SystemExit if the session isn't valid.
         """
-        status, payload = self.post("/api/v1/auth/login", {"username": username})
+        status, payload = self.get("/api/v1/auth/me")
+        if status != 200:
+            raise SystemExit(f"ERROR: session is not valid (HTTP {status}): {_detail(payload)}")
+        return payload if isinstance(payload, dict) else {}
+
+    def login(self, username: str, password: str | None = None) -> dict:
+        """Log in by username and capture the session cookie.
+
+        `password` is required for scientist/admin accounts and ignored for
+        annotator accounts (which have none). Returns the user record
+        (includes `role`). Raises SystemExit on an unknown username, missing
+        or wrong password, or any other non-200 response.
+        """
+        status, payload = self.post("/api/v1/auth/login", {"username": username, "password": password})
         if status == 404:
             raise SystemExit(f"ERROR: login failed - unknown username {username!r}.")
+        if status == 401:
+            raise SystemExit(
+                f"ERROR: login failed - invalid credentials for {username!r}. "
+                "Scientist/admin accounts need --password (or $UPLOAD_PASSWORD)."
+            )
         if status != 200 or not self.session_uuid:
             raise SystemExit(f"ERROR: login failed (HTTP {status}): {_detail(payload)}")
         return payload if isinstance(payload, dict) else {}
@@ -470,6 +506,12 @@ def parse_args(argv=None):
         "Defaults to $UPLOAD_USERNAME.",
     )
     p.add_argument(
+        "--password",
+        default=os.environ.get("UPLOAD_PASSWORD"),
+        help="password for --username; required for scientist/admin accounts, ignored for "
+        "annotator accounts. Defaults to $UPLOAD_PASSWORD.",
+    )
+    p.add_argument(
         "--session-uuid",
         default=os.environ.get("SESSION_UUID"),
         help="auth cookie value (hex) to use instead of --username; defaults to $SESSION_UUID",
@@ -520,15 +562,20 @@ def main(argv=None):
 
     client = ApiClient(args.api_base_url, args.session_uuid)
     if args.username:
-        user = client.login(args.username)
-        role = user.get("role")
-        print(f"Logged in as {user.get('username')!r} (role: {role}).")
-        if role not in ("scientist", "admin"):
-            print(
-                f"WARNING: role {role!r} cannot write to the dataset; "
-                "uploads will be rejected (need scientist/admin).",
-                file=sys.stderr,
-            )
+        user = client.login(args.username, args.password)
+    else:
+        # A raw --session-uuid never went through login(), so the CSRF cookie
+        # (required on every write for scientist/admin sessions) hasn't been
+        # captured yet.
+        user = client.refresh_csrf_token()
+    role = user.get("role")
+    print(f"Logged in as {user.get('username')!r} (role: {role}).")
+    if role not in ("scientist", "admin"):
+        print(
+            f"WARNING: role {role!r} cannot write to the dataset; "
+            "uploads will be rejected (need scientist/admin).",
+            file=sys.stderr,
+        )
 
     dive_uuid = resolve_dive(client, args.dive_uuid)
     print(f"Target dive: {dive_uuid}")

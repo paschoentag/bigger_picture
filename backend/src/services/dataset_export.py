@@ -572,15 +572,24 @@ def _zip_directory(src_dir: Path, dest_zip_path: Path) -> None:
                 zf.write(path, arcname=path.relative_to(src_dir))
 
 
-def build_full_dataset_zip(db: Session, dest_zip_path: Path) -> None:
-    """Every content table as CSV (ids dropped, FKs -> uuids) plus images/ and helper_images/."""
+def build_full_dataset_zip(db: Session, dest_zip_path: Path, include_images: bool = True) -> None:
+    """Every content table as CSV (ids dropped, FKs -> uuids).
+
+    `include_images=True` (the default, used by the existing full-export
+    endpoint - unchanged) also bundles images/ and helper_images/ with the
+    actual asset files. `include_images=False` (used by the separate
+    CSV-only endpoint) skips both folders entirely, for datasets where the
+    asset files would make the zip impractically large (potentially hundreds
+    of GB) and only the CSVs (a few MB at most) are needed.
+    """
     with tempfile.TemporaryDirectory() as staging:
         staging_dir = Path(staging)
         for filename, writer_fn in _FULL_EXPORT_WRITERS:
             with (staging_dir / filename).open("w", newline="", encoding="utf-8") as fh:
                 writer_fn(db, fh)
-        stage_all_images(db, staging_dir / "images")
-        stage_helper_images(db, staging_dir)
+        if include_images:
+            stage_all_images(db, staging_dir / "images")
+            stage_helper_images(db, staging_dir)
         _zip_directory(staging_dir, dest_zip_path)
 
 

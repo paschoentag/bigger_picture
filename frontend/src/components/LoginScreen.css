@@ -39,3 +39,9 @@
   margin: 0;
   color: #e34948;
 }
+
+.login-hint {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.85rem;
+}

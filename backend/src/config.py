@@ -5,10 +5,9 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 DATABASE_PATH = os.environ.get("DATABASE_PATH", str(BACKEND_DIR / "data" / "app.db"))
-# Separate SQLite database for password credentials (scientist/admin accounts
-# only - annotators never have a password). Kept apart from app.db so the
-# whole password_auth package is a self-contained, deletable unit; see
-# src/password_auth/store.py.
+# Separate SQLite database for password credentials, for every role. Kept
+# apart from app.db so the whole password_auth package is a self-contained,
+# deletable unit; see src/password_auth/store.py.
 AUTH_DATABASE_PATH = os.environ.get("AUTH_DATABASE_PATH", str(BACKEND_DIR / "data" / "auth.db"))
 ASSETS_DIR = os.environ.get("ASSETS_DIR", str(BACKEND_DIR / "assets"))
 IMPORT_DIR = os.environ.get("IMPORT_DIR", str(BACKEND_DIR / "import"))

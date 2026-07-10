@@ -242,3 +242,95 @@ def test_overall_pairs_with_overlap_is_global(client, dataset, ann, login_as):
 def test_window_less_than_one_is_422(client, dataset, ann):
     resp = client.get("/api/v1/annotate/stats/me?window=0")
     assert resp.status_code == 422, resp.text
+
+
+# ------------------------- community (site-wide) -------------------------
+
+
+def _get_community_stats(client):
+    resp = client.get("/api/v1/annotate/stats/overall")
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_community_stats_requires_auth(client):
+    assert client.get("/api/v1/annotate/stats/overall").status_code == 401
+
+
+def test_community_stats_dataset_totals(client, dataset, ann):
+    stats = _get_community_stats(client)
+    assert stats["users_total"] >= 2  # scientist + ann, at least
+    assert stats["regions_total"] >= 1
+    assert stats["dives_total"] >= 1
+    assert stats["images_total"] >= 3
+
+
+def test_community_overlap_totals_aggregate_across_players(client, dataset, ann, seed_user, login_as):
+    imgs = dataset["images"]
+    other = seed_user(username="other", role="annotator", expert_level=0)
+
+    login_as(ann)
+    v1 = _vote(client, imgs[0], imgs[1], no_overlap=False)
+    login_as(other)
+    v2 = _vote(client, imgs[1], imgs[2], no_overlap=True)
+
+    login_as(dataset["scientist"])
+    _review_candidate(client, v1, "approve")
+    _review_candidate(client, v2, "approve")
+    # Resolve both candidate pairs at the dataset level.
+    assert client.post(
+        "/api/v1/dataset/candidates/batch/status-change/has_overlap",
+        json=[{"image_a": imgs[0], "image_b": imgs[1]}],
+    ).status_code == 200
+    assert client.post(
+        "/api/v1/dataset/candidates/batch/status-change/no_overlap",
+        json=[{"image_a": imgs[1], "image_b": imgs[2]}],
+    ).status_code == 200
+
+    login_as(ann)
+    overlap = _get_community_stats(client)["overlap"]
+    assert overlap["votes_cast"] == 2  # from both ann and other, not just the caller
+    assert overlap["pairs_with_overlap"] == 1
+    assert overlap["pairs_no_overlap"] == 1
+    assert overlap["pairs_still_open"] == 0
+
+
+def test_community_annotate_totals_aggregate_across_players(client, dataset, ann, seed_user, login_as):
+    imgs = dataset["images"]
+    other = seed_user(username="other", role="annotator", expert_level=0)
+
+    login_as(ann)
+    p1 = _point(client, imgs[0], imgs[1])
+    login_as(other)
+    p2 = _point(client, imgs[0], imgs[1])
+    _point(client, imgs[1], imgs[2])  # left pending
+
+    login_as(dataset["scientist"])
+    _review_point(client, p1, "approve")
+    _review_point(client, p2, "fail")
+
+    login_as(ann)
+    annotate = _get_community_stats(client)["annotate"]
+    assert annotate["points_submitted"] == 3
+    assert annotate["points_verified"] == 1
+    assert annotate["points_pending_review"] == 1
+    assert annotate["pairs_annotated"] == 2
+
+
+def test_community_verify_totals_aggregate_across_players(client, dataset, ann, seed_user, login_as):
+    imgs = dataset["images"]
+    junior = seed_user(username="junior", role="annotator", expert_level=0)
+    login_as(junior)
+    p1 = _point(client, imgs[0], imgs[1])
+    p2 = _point(client, imgs[1], imgs[2])
+    c1 = _vote(client, imgs[0], imgs[1], no_overlap=False)
+
+    login_as(ann)
+    _review_point(client, p1, "approve")
+    _review_point(client, p2, "fail")
+    _review_candidate(client, c1, "approve")
+
+    verify = _get_community_stats(client)["verify"]
+    assert verify["reviews_completed"] == 3
+    assert verify["accepted"] == 2
+    assert verify["rejected"] == 1

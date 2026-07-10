@@ -1,5 +1,4 @@
 import shutil
-import zipfile
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,36 +9,10 @@ from src import config
 from src.api.deps import require_current_user
 from src.db import get_db
 from src.models.dataset import DatasetImportCounts, DatasetImportResponse
-from src.services.assets import move_asset, resolve_asset_path
+from src.services.assets import extract_zip_safely, move_asset
 from src.services.dataset_import import DatasetImportError, run_import
 
 router = APIRouter()
-
-
-def _extract_zip_safely(zip_path: Path, dest_dir: Path) -> None:
-    """Extract `zip_path` into `dest_dir`, rejecting zip-slip entries.
-
-    Reuses `resolve_asset_path`'s traversal/absolute-path/symlink-escape
-    defenses against `dest_dir` instead of `ASSETS_DIR`.
-    """
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        zf = zipfile.ZipFile(zip_path)
-    except zipfile.BadZipFile as exc:
-        raise DatasetImportError("<zip>", None, f"not a valid zip file: {exc}") from exc
-    with zf:
-        for info in zf.infolist():
-            if info.is_dir():
-                continue
-            try:
-                target = resolve_asset_path(info.filename, base_dir=dest_dir)
-            except ValueError as exc:
-                raise DatasetImportError(
-                    "<zip>", None, f"unsafe path in zip: {info.filename!r} ({exc})"
-                ) from exc
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(info) as src, open(target, "wb") as out:
-                shutil.copyfileobj(src, out)
 
 
 @router.post(
@@ -69,7 +42,10 @@ def zip_upload(request: Request, file: UploadFile = File(...), db: Session = Dep
             shutil.copyfileobj(file.file, out)
 
         extract_dir = work_dir / "extracted"
-        _extract_zip_safely(zip_path, extract_dir)
+        try:
+            extract_zip_safely(zip_path, extract_dir)
+        except ValueError as exc:
+            raise DatasetImportError("<zip>", None, str(exc)) from exc
 
         summary, pending_moves = run_import(db, extract_dir, user.id)
         db.commit()

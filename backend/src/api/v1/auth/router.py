@@ -51,15 +51,13 @@ def _set_session_cookie(response: Response, user: User) -> None:
 
 
 def _set_csrf_cookie(response: Response, user: User) -> None:
-    """Set/refresh the CSRF cookie for scientist/admin sessions (see src/csrf.py).
+    """Set/refresh the CSRF cookie for the session (see src/csrf.py).
 
-    A no-op for annotators, who are exempt from CSRF checks. Called on every
-    signup/login/`/me` so a session started before this feature existed - or
-    one whose token was invalidated by a server restart rotating an
-    unconfigured CSRF_SECRET - transparently gets a fresh, valid cookie.
+    Called on every signup/login/`/me` so a session started before this
+    feature existed - or one whose token was invalidated by a server restart
+    rotating an unconfigured CSRF_SECRET - transparently gets a fresh, valid
+    cookie.
     """
-    if user.role == Role.ANNOTATOR:
-        return
     response.set_cookie(
         config.CSRF_COOKIE_NAME,
         compute_csrf_token(user.uuid),
@@ -77,7 +75,7 @@ def _set_csrf_cookie(response: Response, user: User) -> None:
     status_code=201,
     summary="Sign Up",
     description="""
-Create a new self-service account with the given username and start a session for it. Always creates the account with the annotator role; role cannot be chosen or elevated at signup.
+Create a new self-service account with the given username and password, and start a session for it. Always creates the account with the annotator role; role cannot be chosen or elevated at signup.
 
 Sets a session cookie on success. Fails with 409 if the username is already taken (case-insensitively).
 """,
@@ -89,6 +87,7 @@ def signup(payload: SignupRequest, request: Request, response: Response):
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="Username already taken")
 
+    set_password_hash(config.AUTH_DATABASE_PATH, user.uuid, hash_password(payload.password))
     _set_session_cookie(response, user)
     _set_csrf_cookie(response, user)
     return _to_response(user)
@@ -101,13 +100,13 @@ def signup(payload: SignupRequest, request: Request, response: Response):
     description="""
 Start a session for an existing account, identified by username.
 
-Annotator accounts have no password and log in by username alone. Scientist and
-admin accounts require the `password` field to match their stored credential.
+Every account requires the `password` field to match its stored credential.
 
-Sets a session cookie on success (and, for scientist/admin accounts, a CSRF
-cookie - see POST /api/v1/auth/password for how it's used). Fails with 404 if
-the username is not registered, 401 if a password is required and missing,
-wrong, or not yet set for the account.
+Sets a session cookie and a CSRF cookie on success (see POST
+/api/v1/auth/password for how the CSRF cookie is used). Fails with 404 if the
+username is not registered, 403 if the account has no password credential
+stored yet (an admin must set one first), or 401 if the password is missing
+or wrong.
 """,
 )
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
@@ -115,10 +114,13 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if user is None:
         raise HTTPException(status_code=404, detail="Unknown username")
 
-    if user.role != Role.ANNOTATOR:
-        stored_hash = get_password_hash(config.AUTH_DATABASE_PATH, user.uuid)
-        if payload.password is None or stored_hash is None or not verify_password(payload.password, stored_hash):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+    stored_hash = get_password_hash(config.AUTH_DATABASE_PATH, user.uuid)
+    if stored_hash is None:
+        raise HTTPException(
+            status_code=403, detail="This account has no password set yet. Ask an admin to set one."
+        )
+    if payload.password is None or not verify_password(payload.password, stored_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     _set_session_cookie(response, user)
     _set_csrf_cookie(response, user)
@@ -162,22 +164,16 @@ def logout(response: Response):
     description="""
 Set or replace the password for the current session's account.
 
-Requires the scientist or admin role - annotator accounts do not use passwords.
 No confirmation of the current password is required; the session cookie is
 already this system's sole proof of identity. Requires a valid X-CSRF-Token
-header (see the CSRF cookie set at login) since this is a scientist/admin
-account action.
+header (see the CSRF cookie set at login).
 
-Fails with 401 if there is no valid session, 403 if the account is an
-annotator or the CSRF token is missing/invalid, 422 if the password is
-outside the 10-127 character range.
+Fails with 401 if there is no valid session, 403 if the CSRF token is
+missing/invalid, 422 if the password is outside the 10-127 character range.
 """,
 )
 def set_password(payload: SetPasswordRequest, request: Request):
     user = require_current_user(request)
-    if user.role == Role.ANNOTATOR:
-        raise HTTPException(status_code=403, detail="Annotator accounts do not use passwords")
-
     set_password_hash(config.AUTH_DATABASE_PATH, user.uuid, hash_password(payload.password))
 
 

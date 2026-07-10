@@ -1,18 +1,18 @@
 import { apiFetch } from './client'
 import type { User } from './types'
 
-/** Creates a new `annotator` user and sets the session cookie. */
-export function signup(username: string): Promise<User> {
+/** Creates a new `annotator` user with the given password and sets the session cookie. */
+export function signup(username: string, password: string): Promise<User> {
   return apiFetch<User>('/api/v1/auth/signup', {
     method: 'POST',
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ username, password }),
   })
 }
 
 /**
  * Looks up an existing user by username and sets the session cookie.
- * `password` is only required for scientist/admin accounts - annotators log
- * in by username alone and any password passed for them is ignored.
+ * Every account requires a password to log in. Omit `password` to probe
+ * whether the account exists / already has a credential before asking for one.
  */
 export function login(username: string, password?: string): Promise<User> {
   return apiFetch<User>('/api/v1/auth/login', {
@@ -31,7 +31,7 @@ export function logout(): Promise<void> {
   return apiFetch<void>('/api/v1/auth/logout', { method: 'POST' })
 }
 
-/** Sets or replaces the password for the current session's account. Scientist/admin only. */
+/** Sets or replaces the password for the current session's account. */
 export function setPassword(password: string): Promise<void> {
   return apiFetch<void>('/api/v1/auth/password', {
     method: 'POST',

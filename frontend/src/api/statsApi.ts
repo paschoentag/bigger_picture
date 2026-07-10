@@ -57,3 +57,47 @@ export function fetchMyStats(window?: number): Promise<MyStats> {
   const query = window !== undefined ? `?window=${window}` : ''
   return apiFetch<MyStats>(`/api/v1/annotate/stats/me${query}`)
 }
+
+/** Mirrors `CommunityOverlapStats` from `backend/src/models/annotate.py`. */
+export interface CommunityOverlapStats {
+  votes_cast: number
+  pairs_with_overlap: number
+  pairs_no_overlap: number
+  pairs_still_open: number
+}
+
+/** Mirrors `CommunityAnnotateStats` from `backend/src/models/annotate.py`. */
+export interface CommunityAnnotateStats {
+  points_submitted: number
+  points_verified: number
+  points_pending_review: number
+  pairs_annotated: number
+}
+
+/** Mirrors `CommunityVerifyStats` from `backend/src/models/annotate.py`. */
+export interface CommunityVerifyStats {
+  reviews_completed: number
+  accepted: number
+  rejected: number
+}
+
+/** Mirrors `CommunityStatsResponse` from `backend/src/models/annotate.py`. */
+export interface CommunityStats {
+  users_total: number
+  regions_total: number
+  dives_total: number
+  images_total: number
+  overlap: CommunityOverlapStats
+  annotate: CommunityAnnotateStats
+  verify: CommunityVerifyStats
+}
+
+/**
+ * Real endpoint: GET /api/v1/annotate/stats/overall. Returns aggregate,
+ * site-wide statistics across the whole database - dataset size plus totals
+ * for all three game stages, summed over every player rather than scoped to
+ * the caller.
+ */
+export function fetchCommunityStats(): Promise<CommunityStats> {
+  return apiFetch<CommunityStats>('/api/v1/annotate/stats/overall')
+}

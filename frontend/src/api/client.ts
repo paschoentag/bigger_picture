@@ -30,8 +30,8 @@ function formatDetail(detail: unknown): string | undefined {
 
 /**
  * Reads a cookie by name via `document.cookie`. Used only for the
- * non-httponly `csrf_token` cookie (scientist/admin sessions) - the
- * `session_uuid` auth cookie is httponly and never readable from JS.
+ * non-httponly `csrf_token` cookie - the `session_uuid` auth cookie is
+ * httponly and never readable from JS.
  */
 function readCookie(name: string): string | undefined {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
@@ -51,9 +51,8 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
  * header so the browser can set it itself, including the boundary.
  *
  * For any state-changing request, echoes the `csrf_token` cookie (set for
- * scientist/admin sessions only) back as the `X-CSRF-Token` header - the
- * backend requires this for those sessions. A no-op for annotator sessions,
- * which never receive that cookie.
+ * every logged-in session) back as the `X-CSRF-Token` header - the backend
+ * requires this for any authenticated session.
  */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData

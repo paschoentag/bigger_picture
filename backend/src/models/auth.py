@@ -10,12 +10,20 @@ from src.password_auth.hashing import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 class SignupRequest(BaseModel):
     """Request used to create a new self-service account."""
 
-    model_config = ConfigDict(json_schema_extra={"example": {"username": "jdoe"}})
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"username": "jdoe", "password": "correct horse battery staple"}}
+    )
 
     username: str = Field(
         min_length=1,
         max_length=64,
         description="Desired login name. Must be unique, case-insensitively. The new account is always created with the annotator role.",
+    )
+
+    password: str = Field(
+        min_length=MIN_PASSWORD_LENGTH,
+        max_length=MAX_PASSWORD_LENGTH,
+        description=f"Password to protect the new account, {MIN_PASSWORD_LENGTH}-{MAX_PASSWORD_LENGTH} characters.",
     )
 
 
@@ -33,10 +41,7 @@ class LoginRequest(BaseModel):
     password: str | None = Field(
         default=None,
         max_length=MAX_PASSWORD_LENGTH,
-        description=(
-            "Required for scientist/admin accounts; omit or leave null for annotator "
-            "accounts, which never have a password."
-        ),
+        description="Required for every account. Omit only to probe whether the account exists / needs a password.",
     )
 
 
@@ -74,10 +79,7 @@ class StoryResponse(BaseModel):
 
 
 class SetPasswordRequest(BaseModel):
-    """Request used to set or replace the caller's own password.
-
-    Scientist/admin only - annotator accounts do not use passwords.
-    """
+    """Request used to set or replace the caller's own password."""
 
     model_config = ConfigDict(json_schema_extra={"example": {"password": "correct horse battery staple"}})
 

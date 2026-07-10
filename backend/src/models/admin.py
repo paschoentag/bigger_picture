@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.constants import Role
 from src.password_auth.hashing import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
@@ -34,6 +34,7 @@ class UserCreateRequest(BaseModel):
                 "username": "jdoe",
                 "role": "annotator",
                 "expert_level": 0,
+                "password": "correct horse battery staple",
             }
         }
     )
@@ -55,23 +56,11 @@ class UserCreateRequest(BaseModel):
         description="Ignored. expert_level is read-only and derived from exp; new users always start at 0.",
     )
 
-    password: str | None = Field(
-        default=None,
+    password: str = Field(
         min_length=MIN_PASSWORD_LENGTH,
         max_length=MAX_PASSWORD_LENGTH,
-        description=(
-            "Required when role is scientist or admin; must be omitted (or null) when "
-            "role is annotator, since annotator accounts never have a password."
-        ),
+        description="Required for every new user, regardless of role.",
     )
-
-    @model_validator(mode="after")
-    def _check_password_matches_role(self) -> "UserCreateRequest":
-        if self.role == Role.ANNOTATOR and self.password is not None:
-            raise ValueError("password must not be set for annotator accounts")
-        if self.role != Role.ANNOTATOR and self.password is None:
-            raise ValueError("password is required for scientist and admin accounts")
-        return self
 
 
 class UserUpdateRequest(BaseModel):
@@ -82,10 +71,10 @@ class UserUpdateRequest(BaseModel):
     since neither column is nullable. expert_level is read-only and derived
     from exp; any value supplied for it is ignored.
 
-    Supplying `password` sets/replaces the stored credential. It is rejected
-    if the account's resulting role (after this update) is annotator, and
-    required if the resulting role is scientist/admin and no credential
-    exists for the account yet (first-time promotion).
+    Supplying `password` sets/replaces the stored credential, for any role.
+    It is required if the resulting role is scientist/admin and no credential
+    exists for the account yet (first-time promotion). Changing role never
+    touches an existing stored credential on its own.
     """
 
     model_config = ConfigDict(
@@ -119,8 +108,12 @@ class UserUpdateRequest(BaseModel):
         default=None,
         min_length=MIN_PASSWORD_LENGTH,
         max_length=MAX_PASSWORD_LENGTH,
-        description=(
-            "Set a new password. Omit to leave the existing credential untouched. "
-            "Not allowed if the resulting role is annotator."
-        ),
+        description="Set a new password. Omit to leave the existing credential untouched.",
     )
+
+
+class FunFactImportResponse(BaseModel):
+    """Result of a successful fun facts CSV import."""
+
+    created: int = Field(description="Number of new fun facts created.")
+    updated: int = Field(description="Number of existing fun facts overwritten.")

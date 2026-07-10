@@ -161,6 +161,13 @@
   background: color-mix(in srgb, var(--game-accent, var(--text)) 42%, var(--pane-border));
 }
 
+/* Optional third category: plain neutral gray, deliberately outside the
+   accent's hue family - used for "still pending / undecided", which isn't a
+   resolved outcome the way segments 0 and 1 are. */
+.stat-split-seg-2 {
+  background: color-mix(in srgb, var(--pane-border) 85%, var(--text) 15%);
+}
+
 .stat-split-legend {
   list-style: none;
   margin: 0;
@@ -221,4 +228,64 @@
   border-radius: 5px;
   background: var(--game-accent, var(--text-h));
   transition: width 0.4s ease;
+}
+
+/* Cross-stage activity comparison: one row per game, each keeping its own
+   accent so the three stay identifiable without a section-scoped --game-accent. */
+.stage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stage-bar-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.stage-bar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.stage-bar-track {
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--pane-border) 60%, transparent);
+}
+
+.stage-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.4s ease;
+}
+
+.stage-bar-fill-overlap {
+  background: var(--accent-overlap);
+}
+
+.stage-bar-fill-annotate {
+  background: var(--accent-annotate);
+}
+
+.stage-bar-fill-verify {
+  background: var(--accent-verify);
+}
+
+.stage-bar-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-h);
+  min-width: 4ch;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .stage-bar-row {
+    grid-template-columns: 6rem 1fr auto;
+  }
 }

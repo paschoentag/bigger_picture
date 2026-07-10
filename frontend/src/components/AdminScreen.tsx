@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createLabel, fetchLabels, updateLabel } from '../api/labelApi'
 import type { User } from '../api/types'
+import AdminImportAdmin from './admin/AdminImportAdmin'
 import DatasetAdmin from './admin/DatasetAdmin'
 import FunFactsAdmin from './admin/FunFactsAdmin'
 import PasswordSettings from './admin/PasswordSettings'
@@ -24,7 +25,7 @@ function updateLabelAdapter(uuid: string, input: Record<string, unknown>) {
   return updateLabel(uuid, input as { scope?: string; title?: string; description?: string | null })
 }
 
-type Tab = 'regions' | 'labels' | 'facts' | 'users' | 'dataset' | 'import' | 'password'
+type Tab = 'regions' | 'labels' | 'facts' | 'users' | 'dataset' | 'import' | 'adminImport' | 'password'
 
 const LABEL_FIELDS = [
   { key: 'scope', label: 'Scope', type: 'text', required: true } as const,
@@ -38,6 +39,7 @@ export default function AdminScreen({
   onOpenAdmin,
   onOpenStats,
   onOpenQuests,
+  onOpenCommunityStats,
   onOpenLeaderboard,
   onLogout,
 }: {
@@ -46,11 +48,13 @@ export default function AdminScreen({
   onOpenAdmin: () => void
   onOpenStats: () => void
   onOpenQuests: () => void
+  onOpenCommunityStats: () => void
   onOpenLeaderboard: () => void
   onLogout: () => void
 }) {
-  const [tab, setTab] = useState<Tab>('regions')
   const isAdmin = user.role === 'admin'
+  const isAnnotator = user.role === 'annotator'
+  const [tab, setTab] = useState<Tab>(isAnnotator ? 'password' : 'regions')
 
   return (
     <div className="game-screen">
@@ -64,42 +68,63 @@ export default function AdminScreen({
             onOpenAdmin={onOpenAdmin}
             onOpenStats={onOpenStats}
             onOpenQuests={onOpenQuests}
+            onOpenCommunityStats={onOpenCommunityStats}
             onOpenLeaderboard={onOpenLeaderboard}
             onLogout={onLogout}
           />
         </div>
-        <h1>Admin</h1>
-        <p>Manage regions, labels, facts, the dataset, and bulk imports{isAdmin ? ', and users' : ''}.</p>
+        {isAnnotator ? (
+          <>
+            <h1>Password</h1>
+            <p>Set or change the password for your account.</p>
+          </>
+        ) : (
+          <>
+            <h1>Admin</h1>
+            <p>Manage regions, labels, facts, the dataset, and bulk imports{isAdmin ? ', and users' : ''}.</p>
+          </>
+        )}
       </header>
 
-      <div className="admin-tab-bar">
-        <button type="button" className={`btn${tab === 'regions' ? ' btn-primary' : ''}`} onClick={() => setTab('regions')}>
-          Regions
-        </button>
-        <button type="button" className={`btn${tab === 'labels' ? ' btn-primary' : ''}`} onClick={() => setTab('labels')}>
-          Labels
-        </button>
-        <button type="button" className={`btn${tab === 'facts' ? ' btn-primary' : ''}`} onClick={() => setTab('facts')}>
-          Facts
-        </button>
-        <button type="button" className={`btn${tab === 'dataset' ? ' btn-primary' : ''}`} onClick={() => setTab('dataset')}>
-          Dataset
-        </button>
-        <button type="button" className={`btn${tab === 'import' ? ' btn-primary' : ''}`} onClick={() => setTab('import')}>
-          Bulk Import
-        </button>
-        {isAdmin && (
-          <button type="button" className={`btn${tab === 'users' ? ' btn-primary' : ''}`} onClick={() => setTab('users')}>
-            Users
+      {!isAnnotator && (
+        <div className="admin-tab-bar">
+          <button type="button" className={`btn${tab === 'regions' ? ' btn-primary' : ''}`} onClick={() => setTab('regions')}>
+            Regions
           </button>
-        )}
-        <button type="button" className={`btn${tab === 'password' ? ' btn-primary' : ''}`} onClick={() => setTab('password')}>
-          Password
-        </button>
-      </div>
+          <button type="button" className={`btn${tab === 'labels' ? ' btn-primary' : ''}`} onClick={() => setTab('labels')}>
+            Labels
+          </button>
+          <button type="button" className={`btn${tab === 'facts' ? ' btn-primary' : ''}`} onClick={() => setTab('facts')}>
+            Facts
+          </button>
+          <button type="button" className={`btn${tab === 'dataset' ? ' btn-primary' : ''}`} onClick={() => setTab('dataset')}>
+            Dataset
+          </button>
+          <button type="button" className={`btn${tab === 'import' ? ' btn-primary' : ''}`} onClick={() => setTab('import')}>
+            Bulk Import
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className={`btn${tab === 'adminImport' ? ' btn-primary' : ''}`}
+              onClick={() => setTab('adminImport')}
+            >
+              Admin Import
+            </button>
+          )}
+          {isAdmin && (
+            <button type="button" className={`btn${tab === 'users' ? ' btn-primary' : ''}`} onClick={() => setTab('users')}>
+              Users
+            </button>
+          )}
+          <button type="button" className={`btn${tab === 'password' ? ' btn-primary' : ''}`} onClick={() => setTab('password')}>
+            Password
+          </button>
+        </div>
+      )}
 
-      {tab === 'regions' && <RegionsAdmin />}
-      {tab === 'labels' && (
+      {tab === 'regions' && !isAnnotator && <RegionsAdmin />}
+      {tab === 'labels' && !isAnnotator && (
         <SimpleEntityAdmin
           entityName="Labels"
           fields={LABEL_FIELDS}
@@ -108,9 +133,10 @@ export default function AdminScreen({
           update={updateLabelAdapter}
         />
       )}
-      {tab === 'facts' && <FunFactsAdmin />}
-      {tab === 'dataset' && <DatasetAdmin />}
-      {tab === 'import' && <ZipUploadAdmin />}
+      {tab === 'facts' && !isAnnotator && <FunFactsAdmin />}
+      {tab === 'dataset' && !isAnnotator && <DatasetAdmin />}
+      {tab === 'import' && !isAnnotator && <ZipUploadAdmin />}
+      {tab === 'adminImport' && isAdmin && <AdminImportAdmin />}
       {tab === 'users' && isAdmin && <UsersAdmin currentUserUuid={user.uuid} />}
       {tab === 'password' && <PasswordSettings />}
     </div>

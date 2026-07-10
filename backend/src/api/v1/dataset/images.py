@@ -1,23 +1,31 @@
+import shutil
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src import config
 from src.api.deps import require_current_user
 from src.api.v1.dataset._metadata import decode_metadata, encode_metadata
 from src.constants import IMAGE_STATUS_INT, INT_IMAGE_STATUS, ImageStatus
 from src.db import get_db
-from src.models.dataset import ImageCreateRequest, ImageListResponse, ImageResponse, ImageUpdateRequest
+from src.models.dataset import (
+    ImageCreateRequest,
+    ImageListResponse,
+    ImageResponse,
+    ImageUpdateRequest,
+    ImageZipImportResponse,
+)
 from src.schema.dives import Dive
 from src.schema.images import Image
 from src.schema.users import User
-from src.services.assets import move_asset, read_image_dimensions, resolve_asset_path, write_temp_image
+from src.services.assets import extract_zip_safely, move_asset, read_image_dimensions, resolve_asset_path, write_temp_image
 from src.services.errors import ConflictError
 from src.services.images import create_image as _create_image_row
-from src.services.images import ingest_base64_image
+from src.services.images import ImageZipImportError, import_images_zip, ingest_base64_image
 from src.services.images import resolve_dive_id as _resolve_dive_id_or_none
 from src.services.lookups import get_by_uuid, image_has_point_annotations
 from src.util import apply_partial_update
@@ -130,6 +138,82 @@ def create_image(payload: ImageCreateRequest, request: Request, db: Session = De
     db.commit()
     db.refresh(image)
     return _to_response(image, db)
+
+
+@router.post(
+    "/zip-upload",
+    response_model=ImageZipImportResponse,
+    status_code=201,
+    summary="Bulk Import Images From Zip",
+    description="""
+Upload a zip archive of image files into an existing dive. Requires the scientist role.
+
+Every file in the zip is inspected by its magic bytes; anything that isn't a recognized image
+format is ignored (counted as skipped) rather than erroring, so an optional CSV manifest and
+incidental junk (e.g. __MACOSX/) can sit alongside the images.
+
+If the zip also contains a semicolon-delimited `images.csv` at its root, with columns `filename`
+and `uuid`, each listed filename is created with that uuid instead of a random one; every other
+image gets a fresh random uuid. All images are created with status "hidden".
+
+The whole import is all-or-nothing: any error aborts with nothing persisted and no asset files
+left behind.
+
+Fails with 404 if the dive does not exist, or 422 if the zip is malformed, contains an unsafe
+path, has an invalid images.csv row, or an image's filename/uuid collides with an existing image.
+""",
+)
+def zip_upload_images(
+    request: Request,
+    dive_uuid: UUID = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    user = require_current_user(request)
+    dive_id = _resolve_dive_id(db, dive_uuid)
+
+    job_id = uuid4()
+    work_dir = Path(config.IMPORT_DIR) / str(job_id)
+    work_dir.mkdir(parents=True)
+    pending_moves: list[tuple[Path, Path]] = []
+
+    try:
+        zip_path = work_dir / "upload.zip"
+        with open(zip_path, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+
+        extract_dir = work_dir / "extracted"
+        try:
+            extract_zip_safely(zip_path, extract_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"<zip>: {exc}")
+
+        created, skipped, pending_moves = import_images_zip(
+            db,
+            extract_dir,
+            dive_id=dive_id,
+            dive_uuid=dive_uuid,
+            status_id=IMAGE_STATUS_INT[ImageStatus.HIDDEN],
+            creator_id=user.id,
+        )
+        db.commit()
+    except ImageZipImportError as exc:
+        db.rollback()
+        for temp_path, _ in pending_moves:
+            temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=f"{exc.file}: {exc.reason}")
+    except Exception:
+        db.rollback()
+        for temp_path, _ in pending_moves:
+            temp_path.unlink(missing_ok=True)
+        raise
+    else:
+        for temp_path, final_dest in pending_moves:
+            move_asset(temp_path, final_dest)
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+    return ImageZipImportResponse(created=created, skipped=skipped)
 
 
 @router.post(

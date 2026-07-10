@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Reset local dev state: delete the SQLite database and upload ledgers.
+"""Reset local dev state: delete the SQLite databases and upload ledgers.
 
-Removes the backend SQLite database (and its -wal / -shm sidecars) and every
+Removes both backend SQLite databases - the main app database and the
+password_auth database (each with their -wal / -shm sidecars) - and every
 *.state.json progress ledger under the repo, so the next backend start recreates
-an empty database and seed_examples.py re-uploads everything from scratch.
+empty databases and seed_examples.py re-uploads everything from scratch.
 
 Generated CSVs (images.csv / image_pairs.csv) are left in place, so re-seeding
 reuses the same image uuids.
@@ -23,6 +24,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 DEFAULT_DB_PATH = REPO_ROOT / "backend" / "data" / "app.db"
+# Separate, self-contained database for scientist/admin password hashes (see
+# backend/src/password_auth/) - matches config.AUTH_DATABASE_PATH's default.
+DEFAULT_AUTH_DB_PATH = REPO_ROOT / "backend" / "data" / "auth.db"
 # WAL journal mode leaves these sidecar files next to the database.
 DB_SIDECAR_SUFFIXES = ("", "-wal", "-shm")
 # Directories not worth walking when hunting for ledgers.
@@ -31,7 +35,13 @@ SKIP_DIRS = {".git", "node_modules", ".venv", ".devenv", "__pycache__"}
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--database-path", type=Path, default=DEFAULT_DB_PATH, help=f"SQLite file (default: {DEFAULT_DB_PATH})")
+    p.add_argument("--database-path", type=Path, default=DEFAULT_DB_PATH, help=f"main app SQLite file (default: {DEFAULT_DB_PATH})")
+    p.add_argument(
+        "--auth-database-path",
+        type=Path,
+        default=DEFAULT_AUTH_DB_PATH,
+        help=f"password_auth SQLite file (default: {DEFAULT_AUTH_DB_PATH})",
+    )
     p.add_argument("-y", "--yes", action="store_true", help="delete without prompting for confirmation")
     p.add_argument("--dry-run", action="store_true", help="list what would be removed, but delete nothing")
     return p.parse_args(argv)
@@ -59,7 +69,11 @@ def _display(path: Path) -> str:
 def main(argv=None):
     args = parse_args(argv)
 
-    targets = find_database_files(args.database_path) + find_state_files(REPO_ROOT)
+    targets = (
+        find_database_files(args.database_path)
+        + find_database_files(args.auth_database_path)
+        + find_state_files(REPO_ROOT)
+    )
     if not targets:
         print("Nothing to remove; already clean.")
         return

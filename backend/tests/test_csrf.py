@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from src import config
 from src.csrf import CSRF_HEADER_NAME, compute_csrf_token, verify_csrf_token
 
@@ -37,15 +39,22 @@ def _login_scientist(client, seed_user, set_password, username="csrf-sci", passw
     return user
 
 
+def _login_annotator(client, username="csrf-annotator", password="correct horse battery staple"):
+    resp = client.post("/api/v1/auth/signup", json={"username": username, "password": password})
+    assert resp.status_code == 201
+    return resp.json()
+
+
 def test_login_scientist_sets_csrf_cookie(client, seed_user, set_password):
     resp_user = _login_scientist(client, seed_user, set_password)
     assert config.CSRF_COOKIE_NAME in client.cookies
     assert client.cookies[config.CSRF_COOKIE_NAME] == compute_csrf_token(resp_user.uuid)
 
 
-def test_login_annotator_does_not_set_csrf_cookie(client):
-    client.post("/api/v1/auth/signup", json={"username": "csrf-annotator"})
-    assert config.CSRF_COOKIE_NAME not in client.cookies
+def test_login_annotator_sets_csrf_cookie(client):
+    annotator = _login_annotator(client)
+    assert config.CSRF_COOKIE_NAME in client.cookies
+    assert client.cookies[config.CSRF_COOKIE_NAME] == compute_csrf_token(UUID(annotator["uuid"]).bytes)
 
 
 def test_mutating_request_without_csrf_header_is_403(client, seed_user, set_password):
@@ -75,10 +84,20 @@ def test_mutating_request_with_correct_csrf_header_succeeds(client, seed_user, s
     assert resp.status_code == 204
 
 
-def test_annotator_mutating_request_needs_no_csrf_header(client):
-    client.post("/api/v1/auth/signup", json={"username": "csrf-plain"})
+def test_annotator_mutating_request_without_csrf_header_is_403(client):
+    _login_annotator(client, username="csrf-plain")
     client.headers.pop(CSRF_HEADER_NAME, None)
     resp = client.post("/api/v1/auth/story", json={"story": {"chapter": 1}})
+    assert resp.status_code == 403
+
+
+def test_annotator_mutating_request_with_correct_csrf_header_succeeds(client):
+    annotator = _login_annotator(client, username="csrf-plain2")
+    resp = client.post(
+        "/api/v1/auth/story",
+        json={"story": {"chapter": 1}},
+        headers={CSRF_HEADER_NAME: compute_csrf_token(UUID(annotator["uuid"]).bytes)},
+    )
     assert resp.status_code == 200
 
 

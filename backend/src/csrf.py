@@ -1,11 +1,7 @@
-"""Stateless CSRF protection for scientist/admin sessions.
+"""Stateless CSRF protection for every authenticated session.
 
-Annotator accounts are exempt (see AuthMiddleware) - self-service annotator
-signup/annotation is low-value enough that this isn't worth the UX cost, and
-those accounts have no password to protect. Scientist/admin sessions can
-create/promote/demote users, change their own password, and manage backups,
-so a forged cross-site request against one of those accounts is worth
-protecting against.
+Every role now holds a password credential worth protecting, so CSRF cookies
+are issued and checked uniformly regardless of role (see AuthMiddleware).
 
 Uses the "signed double-submit cookie" pattern: the token is
 HMAC-SHA256(CSRF_SECRET, user_uuid), deterministic and unstored. The frontend

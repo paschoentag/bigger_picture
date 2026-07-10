@@ -2,6 +2,7 @@ import base64
 import os
 import shutil
 import tempfile
+import zipfile
 from pathlib import Path, PurePosixPath
 
 import cv2
@@ -45,6 +46,32 @@ def resolve_asset_path(filepath: str, base_dir: Path | None = None) -> Path:
     if not resolved.is_relative_to(root):
         raise ValueError(f"Path escapes base directory: {filepath!r}")
     return resolved
+
+
+def extract_zip_safely(zip_path: Path, dest_dir: Path) -> None:
+    """Extract `zip_path` into `dest_dir`, rejecting zip-slip entries.
+
+    Reuses `resolve_asset_path`'s traversal/absolute-path/symlink-escape
+    defenses against `dest_dir` instead of `ASSETS_DIR`. Raises `ValueError`
+    if the zip is malformed or any entry's path is unsafe - callers own
+    translating that into their own domain-specific error type.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        zf = zipfile.ZipFile(zip_path)
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"not a valid zip file: {exc}") from exc
+    with zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            try:
+                target = resolve_asset_path(info.filename, base_dir=dest_dir)
+            except ValueError as exc:
+                raise ValueError(f"unsafe path in zip: {info.filename!r} ({exc})") from exc
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
 
 
 def write_base64_image(dest: Path, b64: str) -> None:

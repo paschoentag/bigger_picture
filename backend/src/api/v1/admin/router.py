@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.api.v1.admin.backups import router as backups_router
+from src.api.v1.admin.fun_facts import router as fun_facts_router
 from src.api.v1.admin.users import router as users_router
 from src.db import get_db
 from src.models.admin import UserListResponse, UserSummary
@@ -14,6 +15,7 @@ router = APIRouter()
 
 router.include_router(users_router, prefix="/users")
 router.include_router(backups_router, prefix="/backups")
+router.include_router(fun_facts_router, prefix="/fun-facts")
 
 
 @router.get(

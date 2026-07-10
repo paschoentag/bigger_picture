@@ -87,6 +87,24 @@ def export_full_dataset_zip(background_tasks: BackgroundTasks, db: Session = Dep
 
 
 @router.get(
+    "/full-csv-only",
+    summary="Export Full Dataset as Zip, CSVs Only",
+    description="""
+Same as /full, but without the images/ and helper_images/ asset folders - just the CSVs. Use this
+for large datasets where the asset files would make the full export impractically large (potentially
+hundreds of GB); this endpoint's output is typically a few MB regardless of dataset size. Requires
+the scientist role.
+""",
+)
+def export_full_dataset_csv_only_zip(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    return _zip_response(
+        background_tasks,
+        lambda zip_path: build_full_dataset_zip(db, zip_path, include_images=False),
+        f"dataset_export_full_csv_only_{_timestamp()}.zip",
+    )
+
+
+@router.get(
     "/points-flat",
     summary="Export Point Annotations Flat View as CSV",
     description="""

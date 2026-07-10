@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bigger-picture:latest
+    restart: unless-stopped
+    ports:
+      # Point HAProxy's backend at <host>:8000. Single origin, no Vite dev
+      # server, no WebSocket/HMR - this is what fixes the auto-reload issue.
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/assets:/app/assets
+    environment:
+      # First admin account, auto-created once on an empty database.
+      - SEED_ADMIN_USERNAME=admin
+      # CHANGE THIS before first boot (or right after, via POST /api/v1/auth/password).
+      - SEED_ADMIN_PASSWORD=change-me-please
+      # Required behind HTTPS: marks the session/CSRF cookies Secure so
+      # browsers only ever send them over TLS. HAProxy terminates TLS and
+      # forwards plain HTTP to this container, but the cookie flag only
+      # depends on this env var, not on request headers.
+      - COOKIE_SECURE=true
+      # Optional but recommended: a fixed CSRF secret so a container restart
+      # doesn't invalidate every scientist/admin session's CSRF token.
+      # Generate one with: openssl rand -hex 32
+      # - CSRF_SECRET=replace-with-a-random-64-char-hex-string
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

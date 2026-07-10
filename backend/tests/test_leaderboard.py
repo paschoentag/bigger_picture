@@ -1,9 +1,19 @@
 from sqlalchemy import text
 
+from src import config
+from src.csrf import CSRF_HEADER_NAME
+
 
 def _signup(client, username):
-    resp = client.post("/api/v1/auth/signup", json={"username": username})
+    resp = client.post(
+        "/api/v1/auth/signup", json={"username": username, "password": "correct horse battery staple"}
+    )
     assert resp.status_code == 201, resp.text
+    # Echo the fresh CSRF cookie into the default header, mirroring what the
+    # frontend does automatically - needed so a subsequent _signup() call for
+    # a different user (still an unsafe request under the current session)
+    # doesn't get rejected by the CSRF check.
+    client.headers[CSRF_HEADER_NAME] = client.cookies[config.CSRF_COOKIE_NAME]
     return resp.json()["uuid"]
 
 

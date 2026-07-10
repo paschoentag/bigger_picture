@@ -38,3 +38,30 @@ jobs:
         uses: test-summary/action@v2
         with:
           paths: backend/pytest-report.xml
+
+  frontend:
+    name: frontend (build + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # --deny-warnings turns oxlint's warning-level rules into a non-zero
+      # exit code, so the job fails on warnings, not just errors.
+      - name: Lint
+        run: npm run lint -- --deny-warnings

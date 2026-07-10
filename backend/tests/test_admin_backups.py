@@ -46,9 +46,11 @@ def test_create_backup_produces_downloadable_zip_with_db_entry(client, seed_user
 
 def test_create_backup_reflects_committed_data(client, seed_user, login_as, backup_dir, tmp_path):
     _admin(seed_user, login_as)
-    client.post("/api/v1/admin/users/create", json={
+    create_resp = client.post("/api/v1/admin/users/create", json={
         "uuid": "8f8b65dc-fbf2-4dfb-bff2-f34072bb97e2", "username": "snapshotted",
+        "password": "correct horse battery staple",
     })
+    assert create_resp.status_code == 201, create_resp.text
 
     resp = client.post("/api/v1/admin/backups/create")
     assert resp.status_code == 201, resp.text

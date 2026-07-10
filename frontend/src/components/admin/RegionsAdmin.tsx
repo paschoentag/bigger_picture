@@ -7,6 +7,7 @@ import type { Region, RegionMesh } from '../../api/types'
 import { normalizeMeshWinding } from '../../geo'
 import { useContainerSize } from '../../useContainerSize'
 import '../admin/AdminPanels.css'
+import RegionDivesAdmin from './RegionDivesAdmin'
 import './RegionsAdmin.css'
 
 const OTHER_CAP_COLOR = 'rgba(42, 120, 214, 0.35)'
@@ -236,6 +237,13 @@ export default function RegionsAdmin() {
           )}
         </div>
       </form>
+
+      {editing && (
+        <div className="regions-admin-dives">
+          <h3>Dives in {editing.title}</h3>
+          <RegionDivesAdmin key={editing.uuid} regionUuid={editing.uuid} />
+        </div>
+      )}
     </div>
   )
 }

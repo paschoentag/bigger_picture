@@ -7,6 +7,12 @@ import './AdminPanels.css'
 
 const ROLES: Role[] = ['annotator', 'scientist', 'admin']
 
+// Mirrors MIN_PASSWORD_LENGTH / MAX_PASSWORD_LENGTH in backend/src/password_auth/hashing.py.
+const MIN_PASSWORD_LENGTH = 10
+const MAX_PASSWORD_LENGTH = 127
+
+type FieldName = 'username' | 'password' | 'expertLevel'
+
 export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: string }) {
   const [users, setUsers] = useState<UserSummary[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -18,6 +24,23 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
   const [password, setPassword] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [touched, setTouched] = useState<Record<FieldName, boolean>>({
+    username: false,
+    password: false,
+    expertLevel: false,
+  })
+
+  const expertLevelNumber = Number(expertLevel)
+  const fieldErrors: Partial<Record<FieldName, string>> = {}
+  if (!username.trim()) fieldErrors.username = 'Username is required.'
+  if (!Number.isInteger(expertLevelNumber)) fieldErrors.expertLevel = 'Must be a whole number.'
+  if (!editing && !password) {
+    fieldErrors.password = 'Password is required.'
+  } else if (password && (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH)) {
+    fieldErrors.password = `Must be ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`
+  }
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0
+  const touchField = (field: FieldName) => setTouched((t) => ({ ...t, [field]: true }))
 
   const load = () => {
     setLoading(true)
@@ -37,6 +60,7 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
     setExpertLevel('0')
     setPassword('')
     setFormError(null)
+    setTouched({ username: false, password: false, expertLevel: false })
   }
 
   const startEdit = (user: UserSummary) => {
@@ -46,23 +70,26 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
     setExpertLevel(String(user.expert_level))
     setPassword('')
     setFormError(null)
+    setTouched({ username: false, password: false, expertLevel: false })
   }
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (submitting) return
 
-    const expert_level = Number(expertLevel)
-    if (!Number.isInteger(expert_level)) {
-      setFormError('Expert level must be a whole number.')
-      return
-    }
+    setTouched({ username: true, password: true, expertLevel: true })
+    if (hasFieldErrors) return
 
     setFormError(null)
     setSubmitting(true)
     const request = editing
-      ? updateUser(editing.uuid, { username, role, expert_level, ...(password ? { password } : {}) })
-      : createUser({ username, role, expert_level, ...(role !== 'annotator' ? { password } : {}) })
+      ? updateUser(editing.uuid, {
+          username,
+          role,
+          expert_level: expertLevelNumber,
+          ...(password ? { password } : {}),
+        })
+      : createUser({ username, role, expert_level: expertLevelNumber, password })
     request
       .then(() => {
         load()
@@ -114,7 +141,17 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
         <h3>{editing ? 'Edit user' : 'New user'}</h3>
         <label className="admin-form-field">
           Username
-          <input type="text" value={username} required onChange={(e) => setUsername(e.target.value)} />
+          <input
+            type="text"
+            value={username}
+            required
+            onChange={(e) => setUsername(e.target.value)}
+            onBlur={() => touchField('username')}
+            aria-invalid={touched.username && !!fieldErrors.username}
+          />
+          {touched.username && fieldErrors.username && (
+            <span className="admin-field-error">{fieldErrors.username}</span>
+          )}
         </label>
         <label className="admin-form-field">
           Role
@@ -133,24 +170,41 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
             value={expertLevel}
             required
             onChange={(e) => setExpertLevel(e.target.value)}
+            onBlur={() => touchField('expertLevel')}
+            aria-invalid={touched.expertLevel && !!fieldErrors.expertLevel}
           />
+          {touched.expertLevel && fieldErrors.expertLevel && (
+            <span className="admin-field-error">{fieldErrors.expertLevel}</span>
+          )}
         </label>
-        {role !== 'annotator' && (
-          <label className="admin-form-field">
-            {editing ? 'New password (leave blank to keep existing)' : 'Password'}
-            <input
-              type="password"
-              value={password}
-              required={!editing}
-              minLength={10}
-              maxLength={127}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-        )}
+        <label className="admin-form-field">
+          {editing ? 'New password (leave blank to keep existing)' : 'Password'}
+          <input
+            type="password"
+            value={password}
+            required={!editing}
+            minLength={MIN_PASSWORD_LENGTH}
+            maxLength={MAX_PASSWORD_LENGTH}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => touchField('password')}
+            aria-invalid={touched.password && !!fieldErrors.password}
+          />
+          {touched.password && fieldErrors.password ? (
+            <span className="admin-field-error">{fieldErrors.password}</span>
+          ) : (
+            <span className="admin-field-hint">
+              {editing ? `Leave blank to keep the current password, or use ${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.` : `${MIN_PASSWORD_LENGTH}-${MAX_PASSWORD_LENGTH} characters.`}
+            </span>
+          )}
+        </label>
         {formError && <p className="game-status game-status-error">{formError}</p>}
         <div className="admin-form-actions">
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={submitting || hasFieldErrors}
+            title={hasFieldErrors ? Object.values(fieldErrors).join(' ') : undefined}
+          >
             {submitting ? 'Saving…' : editing ? 'Save changes' : 'Create'}
           </button>
           {editing && (
@@ -159,6 +213,11 @@ export default function UsersAdmin({ currentUserUuid }: { currentUserUuid: strin
             </button>
           )}
         </div>
+        {hasFieldErrors && (
+          <p className="admin-field-hint admin-form-blocking-hint">
+            Can't submit yet: {Object.values(fieldErrors).join(' ')}
+          </p>
+        )}
       </form>
     </div>
   )

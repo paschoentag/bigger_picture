@@ -353,6 +353,46 @@ class LeaderboardResponse(BaseModel):
     total: int = Field(description="Total number of players, so clients know when to stop paging.")
 
 
+class CommunityOverlapStats(BaseModel):
+    """Site-wide Stage 1 (Finding Overlap) totals across every player."""
+
+    votes_cast: int = Field(description="Total overlap votes cast by all players, across all time.")
+    pairs_with_overlap: int = Field(description="Candidate pairs the community resolved to has_overlap.")
+    pairs_no_overlap: int = Field(description="Candidate pairs the community resolved to no_overlap.")
+    pairs_still_open: int = Field(description="Candidate pairs still awaiting enough votes to resolve.")
+
+
+class CommunityAnnotateStats(BaseModel):
+    """Site-wide Stage 2 (Annotating) totals across every player."""
+
+    points_submitted: int = Field(description="Total point annotations submitted by all players, across all time.")
+    points_verified: int = Field(description="Point annotations that were reviewed and approved.")
+    points_pending_review: int = Field(description="Point annotations awaiting Stage 3 review.")
+    pairs_annotated: int = Field(description="Distinct image pairs with at least one point annotation.")
+
+
+class CommunityVerifyStats(BaseModel):
+    """Site-wide Stage 3 (Verification) totals across every player."""
+
+    reviews_completed: int = Field(
+        description="Total reviews performed by all players, across overlap and point annotations."
+    )
+    accepted: int = Field(description="Reviews where the reviewer approved the annotation.")
+    rejected: int = Field(description="Reviews where the reviewer marked the annotation as failed.")
+
+
+class CommunityStatsResponse(BaseModel):
+    """Aggregate, site-wide statistics across the whole database - not scoped to any one player."""
+
+    users_total: int = Field(description="Total number of registered accounts.")
+    regions_total: int = Field(description="Total number of regions in the dataset.")
+    dives_total: int = Field(description="Total number of dives in the dataset.")
+    images_total: int = Field(description="Total number of images in the dataset.")
+    overlap: CommunityOverlapStats = Field(description="Stage 1 (Finding Overlap) totals.")
+    annotate: CommunityAnnotateStats = Field(description="Stage 2 (Annotating) totals.")
+    verify: CommunityVerifyStats = Field(description="Stage 3 (Verification) totals.")
+
+
 class QuestResponse(BaseModel):
     """A single daily quest with the caller's progress toward it.
 

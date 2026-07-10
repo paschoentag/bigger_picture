@@ -79,12 +79,16 @@ export interface Region {
   metadata: ({ mesh?: RegionMesh } & Record<string, unknown>) | null
 }
 
-/** Mirrors `DiveResponse` from `backend/src/models/dataset.py`, as returned by `GET /api/v1/annotate/dives`. */
+/** Mirrors `DiveResponse` from `backend/src/models/dataset.py`, as returned by `GET /api/v1/annotate/dives` and `GET /api/v1/dataset/dives`. */
 export interface Dive {
   uuid: string
+  created_at: number
+  created_by: string
   title: string
+  metadata: Record<string, unknown> | null
   description: string | null
   region: string
+  camera: string
 }
 
 /** Mirrors `ImageResponse` from `backend/src/models/dataset.py`, as returned by `GET /api/v1/dataset/images`. */

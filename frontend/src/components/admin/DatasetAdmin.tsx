@@ -4,6 +4,7 @@ import {
   downloadAnnotationsCsv,
   downloadCandidateAnnotationsFlatCsv,
   downloadDiveZip,
+  downloadFullDatasetCsvOnlyZip,
   downloadFullDatasetZip,
   downloadFunFactsCsv,
   downloadFunFactsZip,
@@ -12,10 +13,14 @@ import {
   fetchCandidatePairsForDive,
   fetchImagePairsForDive,
   fetchImagesForDive,
+  publishCandidatePairs,
 } from '../../api/datasetApi'
+import type { PublishCandidatesResult, StrideCandidatePairResult } from '../../api/datasetApi'
 import { fetchDivesForRegion } from '../../api/diveApi'
 import { fetchRegions } from '../../api/regionApi'
 import type { AnnotationSummary, CandidatePairSummary, DatasetImage, Dive, ImagePairSummary, Region } from '../../api/types'
+import CreateStrideCandidatePairsModal from './CreateStrideCandidatePairsModal'
+import UploadImagesModal from './UploadImagesModal'
 import '../admin/AdminPanels.css'
 import './DatasetAdmin.css'
 
@@ -61,6 +66,7 @@ export default function DatasetAdmin() {
 
   const [candidates, setCandidates] = useState<CandidatePairSummary[] | null>(null)
   const [candidatesTotal, setCandidatesTotal] = useState(0)
+  const [candidatesHiddenCount, setCandidatesHiddenCount] = useState(0)
   const [candidatesPage, setCandidatesPage] = useState(1)
 
   const [pairs, setPairs] = useState<ImagePairSummary[] | null>(null)
@@ -69,6 +75,15 @@ export default function DatasetAdmin() {
 
   const [annotations, setAnnotations] = useState<AnnotationSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const [strideModalOpen, setStrideModalOpen] = useState(false)
+  const [strideResult, setStrideResult] = useState<StrideCandidatePairResult | null>(null)
+
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [uploadResult, setUploadResult] = useState<number | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [publishResult, setPublishResult] = useState<PublishCandidatesResult | null>(null)
+  const [publishError, setPublishError] = useState<string | null>(null)
 
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -97,6 +112,7 @@ export default function DatasetAdmin() {
     setImagesPage(1)
     setCandidates(null)
     setCandidatesTotal(0)
+    setCandidatesHiddenCount(0)
     setCandidatesPage(1)
     setPairs(null)
     setPairsTotal(0)
@@ -104,7 +120,7 @@ export default function DatasetAdmin() {
     setAnnotations(null)
   }, [diveUuid])
 
-  useEffect(() => {
+  const loadImages = () => {
     if (!diveUuid) return
     fetchImagesForDive(diveUuid, imagesPage, PAGE_SIZE)
       .then(({ items, total }) => {
@@ -112,17 +128,59 @@ export default function DatasetAdmin() {
         setImagesTotal(total)
       })
       .catch(() => setError('Could not load images for this dive.'))
-  }, [diveUuid, imagesPage])
+  }
 
-  useEffect(() => {
+  useEffect(loadImages, [diveUuid, imagesPage])
+
+  const loadCandidatePairs = () => {
     if (!diveUuid) return
     fetchCandidatePairsForDive(diveUuid, candidatesPage, PAGE_SIZE)
-      .then(({ items, total }) => {
+      .then(({ items, total, hiddenCount }) => {
         setCandidates(items)
         setCandidatesTotal(total)
+        setCandidatesHiddenCount(hiddenCount)
       })
       .catch(() => setError('Could not load candidate pairs for this dive.'))
-  }, [diveUuid, candidatesPage])
+  }
+
+  useEffect(loadCandidatePairs, [diveUuid, candidatesPage])
+
+  const handlePublish = () => {
+    if (!diveUuid || publishing) return
+    setPublishing(true)
+    setPublishError(null)
+    publishCandidatePairs(diveUuid)
+      .then((result) => {
+        setPublishResult(result)
+        loadCandidatePairs()
+      })
+      .catch((err: unknown) => {
+        setPublishError(err instanceof ApiError ? err.message : 'Could not publish candidate pairs.')
+      })
+      .finally(() => setPublishing(false))
+  }
+
+  const handlePublishAll = async () => {
+    if (!diveUuid || publishing) return
+    setPublishing(true)
+    setPublishError(null)
+    try {
+      let totalPublished = 0
+      let remainingHidden: number
+      do {
+        const result = await publishCandidatePairs(diveUuid)
+        totalPublished += result.published
+        remainingHidden = result.remaining_hidden
+        if (result.published === 0) break
+      } while (remainingHidden > 0)
+      setPublishResult({ published: totalPublished, remaining_hidden: remainingHidden })
+      loadCandidatePairs()
+    } catch (err) {
+      setPublishError(err instanceof ApiError ? err.message : 'Could not publish candidate pairs.')
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   useEffect(() => {
     if (!diveUuid) return
@@ -175,6 +233,8 @@ export default function DatasetAdmin() {
 
   const handleDownloadFullDataset = () =>
     runGlobalDownload(() => downloadFullDatasetZip(), 'Could not download the dataset zip.')
+  const handleDownloadFullDatasetCsvOnly = () =>
+    runGlobalDownload(() => downloadFullDatasetCsvOnlyZip(), 'Could not download the dataset zip.')
   const handleDownloadFunFactsCsv = () =>
     runGlobalDownload(() => downloadFunFactsCsv(), 'Could not download the CSV.')
   const handleDownloadFunFactsZip = () =>
@@ -187,6 +247,9 @@ export default function DatasetAdmin() {
       <div className="dataset-admin-toolbar dataset-admin-toolbar-global">
         <button type="button" className="btn" onClick={handleDownloadFullDataset} disabled={globalDownloading}>
           {globalDownloading ? 'Downloading…' : 'Download full dataset (zip)'}
+        </button>
+        <button type="button" className="btn" onClick={handleDownloadFullDatasetCsvOnly} disabled={globalDownloading}>
+          {globalDownloading ? 'Downloading…' : 'Download full dataset - CSVs only (zip)'}
         </button>
         <button type="button" className="btn" onClick={handleDownloadFunFactsCsv} disabled={globalDownloading}>
           {globalDownloading ? 'Downloading…' : 'Download fun facts (CSV)'}
@@ -254,7 +317,15 @@ export default function DatasetAdmin() {
           </div>
 
           <section className="dataset-admin-section">
-            <h3>Images ({imagesTotal})</h3>
+            <div className="dataset-admin-section-header">
+              <h3>Images ({imagesTotal})</h3>
+              <button type="button" className="btn" onClick={() => setUploadModalOpen(true)}>
+                Upload images…
+              </button>
+            </div>
+            {uploadResult !== null && (
+              <p className="game-status">Uploaded {uploadResult} image(s).</p>
+            )}
             {images === null ? (
               <p className="game-status">Loading…</p>
             ) : (
@@ -294,7 +365,42 @@ export default function DatasetAdmin() {
           </section>
 
           <section className="dataset-admin-section">
-            <h3>Candidate pairs ({candidatesTotal})</h3>
+            <div className="dataset-admin-section-header">
+              <h3>Candidate pairs ({candidatesTotal})</h3>
+              <div className="dataset-admin-section-actions">
+                <button type="button" className="btn" onClick={() => setStrideModalOpen(true)}>
+                  Create pairs by stride…
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handlePublish}
+                  disabled={candidatesHiddenCount === 0 || publishing}
+                >
+                  {publishing ? 'Publishing…' : `Publish up to 100 (${candidatesHiddenCount} hidden)`}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={handlePublishAll}
+                  disabled={candidatesHiddenCount === 0 || publishing}
+                >
+                  {publishing ? 'Publishing…' : 'Publish all'}
+                </button>
+              </div>
+            </div>
+            {strideResult && (
+              <p className="game-status">
+                Created {strideResult.pairs_created} new candidate pairs ({strideResult.pairs_skipped} already
+                existed).
+              </p>
+            )}
+            {publishResult && (
+              <p className="game-status">
+                Published {publishResult.published} candidate pairs ({publishResult.remaining_hidden} still hidden).
+              </p>
+            )}
+            {publishError && <p className="game-status game-status-error">{publishError}</p>}
             {candidates === null ? (
               <p className="game-status">Loading…</p>
             ) : (
@@ -381,6 +487,40 @@ export default function DatasetAdmin() {
             )}
           </section>
         </>
+      )}
+
+      {uploadModalOpen && (
+        <UploadImagesModal
+          diveUuid={diveUuid}
+          onCancel={() => setUploadModalOpen(false)}
+          onUploaded={(uploadedCount) => {
+            setUploadResult(uploadedCount)
+            setUploadModalOpen(false)
+            if (imagesPage === 1) {
+              loadImages()
+            } else {
+              setImagesPage(1)
+            }
+          }}
+        />
+      )}
+
+      {strideModalOpen && (
+        <CreateStrideCandidatePairsModal
+          diveUuid={diveUuid}
+          onCancel={() => setStrideModalOpen(false)}
+          onCreated={(result) => {
+            setStrideResult(result)
+            setStrideModalOpen(false)
+            // If already on page 1, changing the page is a no-op, so refetch directly;
+            // otherwise resetting the page triggers the existing effect to refetch.
+            if (candidatesPage === 1) {
+              loadCandidatePairs()
+            } else {
+              setCandidatesPage(1)
+            }
+          }}
+        />
       )}
     </div>
   )

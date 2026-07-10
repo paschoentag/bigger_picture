@@ -1,0 +1,221 @@
+/* Shared backdrop/card shell and example-scene styling for tutorial overlays
+   (both the paged TutorialModal deck and bespoke walkthroughs like
+   AnnotateTutorial). Mirrors AnnotateHintsModal.css / FunFactModal.css.
+   Per-game accent is set from --accent-* via data-game on .tut-backdrop. */
+.tut-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 100;
+}
+
+.tut-backdrop[data-game='overlap'] {
+  --tut-accent: var(--accent-overlap);
+}
+.tut-backdrop[data-game='annotate'] {
+  --tut-accent: var(--accent-annotate);
+}
+.tut-backdrop[data-game='verify'] {
+  --tut-accent: var(--accent-verify);
+}
+
+.tut-modal {
+  max-width: 560px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--pane-border);
+  border-top: 3px solid var(--tut-accent, var(--pane-border));
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tut-modal h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--text-h);
+}
+
+.tut-body {
+  margin: 0;
+}
+
+.tut-modal .btn-primary {
+  background: var(--tut-accent);
+  border-color: var(--tut-accent);
+}
+
+/* Example scene ---------------------------------------------------------- */
+.tut-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--pane-border);
+}
+
+.tut-scene-svg,
+.tut-scene-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tut-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tut-point-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.tut-point-good .tut-point-dot {
+  background: #2f9e6f;
+}
+
+.tut-point-bad .tut-point-dot {
+  background: #d1435b;
+}
+
+.tut-point-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tut-feedback {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tut-feedback-ok {
+  color: #2f9e6f;
+}
+
+.tut-feedback-bad {
+  color: #d1435b;
+}
+
+.tut-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A guided walkthrough's final call-to-action, right-aligned in .tut-footer. */
+.tut-start {
+  margin-left: auto;
+}
+
+/* Escape hatch out of a guided walkthrough. */
+.tut-skip {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin: -8px 0 -8px auto;
+}
+
+/* Two scenes side by side, e.g. the two photos a guided walkthrough puts the
+   reader in front of. */
+.tut-scene-row {
+  display: flex;
+  gap: 12px;
+}
+
+.tut-scene-row .tut-scene {
+  flex: 1;
+}
+
+/* A centered pair of decision buttons, e.g. "Same scene" / "Different scene". */
+.tut-choice-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* Pulsing "click here" indicator for a guided walkthrough's current target. */
+.tut-hint {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  border-radius: 50%;
+  border: 3px dashed #eda100;
+  pointer-events: none;
+  animation: tut-pulse 1.1s ease-in-out infinite;
+}
+
+/* Pulsing "don't click this" indicator, e.g. a moving object to avoid. */
+.tut-avoid {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+  border-radius: 50%;
+  border: 3px solid #d1435b;
+  box-shadow: 0 0 0 4px rgba(209, 67, 91, 0.25);
+  pointer-events: none;
+  animation: tut-pulse 1.4s ease-in-out infinite;
+}
+
+.tut-avoid-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 6px);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(209, 67, 91, 0.9);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+@keyframes tut-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.55;
+  }
+}

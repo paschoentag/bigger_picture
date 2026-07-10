@@ -10,12 +10,16 @@ For each dataset this:
 Idempotent: existing dives are reused (matched by title) and the region/dive
 uuids are derived from their titles, so re-running never creates duplicates.
 
-Authentication defaults to logging in as the USERNAME constant below (needs the
-scientist/admin role); override with --username / --session-uuid.
+Authentication defaults to logging in as the USERNAME/PASSWORD constants below
+(needs the scientist/admin role, which requires a password) - these match the
+SEED_ADMIN_USERNAME/SEED_ADMIN_PASSWORD backend auto-seeds on first boot (see
+docker-compose.yml and backend/README.md), so the zero-arg form works out of
+the box against a freshly started backend. Override with --username/--password
+or --session-uuid.
 
     python scripts/seed_examples.py                # seed every dataset as admin
     python scripts/seed_examples.py north_sea      # seed just one
-    python scripts/seed_examples.py --username sci
+    python scripts/seed_examples.py --username sci --password <10-127 chars>
 """
 
 import argparse
@@ -29,6 +33,9 @@ import upload_dataset
 HERE = Path(__file__).resolve().parent
 EXAMPLES_DIR = HERE / "example_data"
 USERNAME = "admin"
+# Matches backend/src/config.py's SEED_ADMIN_PASSWORD default - the password
+# the backend auto-seeds for USERNAME on first boot (see docker-compose.yml).
+PASSWORD = "change-me-please"
 # Fixed namespace so region/dive uuids are derived from their titles and are
 # therefore stable across runs (no duplicates on re-run).
 UUID_NAMESPACE = uuid.UUID("0b3e5f9a-1c2d-4e6f-8a9b-0c1d2e3f4a5b")
@@ -51,6 +58,12 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("datasets", nargs="*", metavar="DATASET", help=f"datasets to seed (default: all of {names})")
     p.add_argument("--username", default=USERNAME, help=f"log in as this user (default: {USERNAME})")
+    p.add_argument(
+        "--password",
+        default=PASSWORD,
+        help=f"password for --username; required for scientist/admin accounts (default: {PASSWORD!r}, "
+        "matching the backend's auto-seeded admin password)",
+    )
     p.add_argument("--session-uuid", default=None, help="raw session cookie (or set $SESSION_UUID)")
     p.add_argument("--api-base-url", default=None, help=f"backend URL (default {upload_dataset.DEFAULT_BASE_URL})")
     p.add_argument("-n", "--num-subsequent", type=int, default=5, help="images to pair with each image (default: 5)")
@@ -77,8 +90,13 @@ def dataset_paths(ds: Dataset):
 def _authenticated_client(args, base_url):
     """Build an ApiClient authenticated the same way upload_dataset is."""
     client = upload_dataset.ApiClient(base_url, args.session_uuid)
-    if not args.session_uuid:
-        client.login(args.username)
+    if args.session_uuid:
+        # A raw session cookie never went through login(), so the CSRF cookie
+        # (required on every write for scientist/admin sessions) hasn't been
+        # captured yet.
+        client.refresh_csrf_token()
+    else:
+        client.login(args.username, args.password)
     return client
 
 
@@ -170,6 +188,8 @@ def seed_dataset(ds: Dataset, args, base_url, client) -> None:
         upload_argv += ["--session-uuid", args.session_uuid]
     else:
         upload_argv += ["--username", args.username]
+        if args.password:
+            upload_argv += ["--password", args.password]
     if args.api_base_url:
         upload_argv += ["--api-base-url", args.api_base_url]
 

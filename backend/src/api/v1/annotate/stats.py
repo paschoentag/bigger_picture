@@ -7,6 +7,7 @@ from src.constants import (
     ANNOTATION_APPROVED,
     ANNOTATION_DELETED,
     ANNOTATION_REVIEW_FAILED,
+    ANNOTATION_REVIEW_PENDING,
     CANDIDATE_STATUS_INT,
     CandidateStatus,
 )
@@ -14,18 +15,28 @@ from src.db import get_db
 from src.models.annotate import (
     AccuracyStat,
     AnnotateStats,
+    CommunityAnnotateStats,
+    CommunityOverlapStats,
+    CommunityStatsResponse,
+    CommunityVerifyStats,
     MyStatsResponse,
     OverlapStats,
     VerifyStats,
 )
 from src.schema.candidate_annotations import CandidateAnnotation
 from src.schema.candidate_pairs import CandidatePair
+from src.schema.dives import Dive
+from src.schema.images import Image
 from src.schema.point_annotations import PointAnnotation
+from src.schema.regions import Region
+from src.schema.users import User
 
 router = APIRouter()
 
 REVIEWED_STATUSES = (ANNOTATION_APPROVED, ANNOTATION_REVIEW_FAILED)
 CANDIDATE_HAS_OVERLAP = CANDIDATE_STATUS_INT[CandidateStatus.HAS_OVERLAP]
+CANDIDATE_NO_OVERLAP = CANDIDATE_STATUS_INT[CandidateStatus.NO_OVERLAP]
+CANDIDATE_OPEN = CANDIDATE_STATUS_INT[CandidateStatus.OPEN]
 
 
 def _accuracy_stat(db: Session, model, user_id: int, window: int | None = None) -> AccuracyStat:
@@ -136,6 +147,98 @@ def _verify_stats(db: Session, user_id: int) -> VerifyStats:
         accepted += row[1]
         faulty_found += row[2]
     return VerifyStats(verified=verified, accepted=accepted, faulty_found=faulty_found)
+
+
+def _community_overlap_stats(db: Session) -> CommunityOverlapStats:
+    votes_cast = db.execute(
+        select(func.count())
+        .select_from(CandidateAnnotation)
+        .where(CandidateAnnotation.status_id != ANNOTATION_DELETED)
+    ).scalar_one()
+    pairs_with_overlap = db.execute(
+        select(func.count()).select_from(CandidatePair).where(CandidatePair.status_id == CANDIDATE_HAS_OVERLAP)
+    ).scalar_one()
+    pairs_no_overlap = db.execute(
+        select(func.count()).select_from(CandidatePair).where(CandidatePair.status_id == CANDIDATE_NO_OVERLAP)
+    ).scalar_one()
+    pairs_still_open = db.execute(
+        select(func.count()).select_from(CandidatePair).where(CandidatePair.status_id == CANDIDATE_OPEN)
+    ).scalar_one()
+    return CommunityOverlapStats(
+        votes_cast=votes_cast,
+        pairs_with_overlap=pairs_with_overlap,
+        pairs_no_overlap=pairs_no_overlap,
+        pairs_still_open=pairs_still_open,
+    )
+
+
+def _community_annotate_stats(db: Session) -> CommunityAnnotateStats:
+    active = PointAnnotation.status_id != ANNOTATION_DELETED
+    points_submitted = db.execute(
+        select(func.count()).select_from(PointAnnotation).where(active)
+    ).scalar_one()
+    points_verified = db.execute(
+        select(func.count())
+        .select_from(PointAnnotation)
+        .where(active, PointAnnotation.status_id == ANNOTATION_APPROVED)
+    ).scalar_one()
+    points_pending_review = db.execute(
+        select(func.count())
+        .select_from(PointAnnotation)
+        .where(active, PointAnnotation.status_id == ANNOTATION_REVIEW_PENDING)
+    ).scalar_one()
+    pairs_annotated = db.execute(
+        select(func.count(func.distinct(PointAnnotation.pair_id))).where(active)
+    ).scalar_one()
+    return CommunityAnnotateStats(
+        points_submitted=points_submitted,
+        points_verified=points_verified,
+        points_pending_review=points_pending_review,
+        pairs_annotated=pairs_annotated,
+    )
+
+
+def _community_verify_stats(db: Session) -> CommunityVerifyStats:
+    reviews_completed = accepted = rejected = 0
+    for model in (CandidateAnnotation, PointAnnotation):
+        row = db.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(case((model.status_id == ANNOTATION_APPROVED, 1), else_=0)), 0),
+                func.coalesce(func.sum(case((model.status_id == ANNOTATION_REVIEW_FAILED, 1), else_=0)), 0),
+            )
+            .select_from(model)
+            .where(model.reviewed_by.is_not(None))
+        ).one()
+        reviews_completed += row[0]
+        accepted += row[1]
+        rejected += row[2]
+    return CommunityVerifyStats(reviews_completed=reviews_completed, accepted=accepted, rejected=rejected)
+
+
+@router.get(
+    "/overall",
+    response_model=CommunityStatsResponse,
+    summary="Get Community Statistics",
+    description="""
+Return aggregate, site-wide statistics across the whole database - dataset size plus totals for all three game stages, summed over every player rather than scoped to the caller. Requires the annotator role (or any higher role).
+""",
+)
+def get_community_stats(db: Session = Depends(get_db)):
+    users_total = db.execute(select(func.count()).select_from(User)).scalar_one()
+    regions_total = db.execute(select(func.count()).select_from(Region)).scalar_one()
+    dives_total = db.execute(select(func.count()).select_from(Dive)).scalar_one()
+    images_total = db.execute(select(func.count()).select_from(Image)).scalar_one()
+
+    return CommunityStatsResponse(
+        users_total=users_total,
+        regions_total=regions_total,
+        dives_total=dives_total,
+        images_total=images_total,
+        overlap=_community_overlap_stats(db),
+        annotate=_community_annotate_stats(db),
+        verify=_community_verify_stats(db),
+    )
 
 
 @router.get(

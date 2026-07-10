@@ -64,6 +64,7 @@ export default function HomeScreen({
   onOpenAdmin,
   onOpenStats,
   onOpenQuests,
+  onOpenCommunityStats,
   onOpenLeaderboard,
   onLogout,
 }: {
@@ -74,6 +75,7 @@ export default function HomeScreen({
   onOpenAdmin: () => void
   onOpenStats: () => void
   onOpenQuests: () => void
+  onOpenCommunityStats: () => void
   onOpenLeaderboard: () => void
   onLogout: () => void
 }) {
@@ -140,6 +142,7 @@ export default function HomeScreen({
         onOpenAdmin={onOpenAdmin}
         onOpenStats={onOpenStats}
         onOpenQuests={onOpenQuests}
+        onOpenCommunityStats={onOpenCommunityStats}
         onOpenLeaderboard={onOpenLeaderboard}
         onLogout={onLogout}
       />
