@@ -90,6 +90,16 @@ h2 {
   display: block;
 }
 
+/* Bare .back-link (e.g. "Back to games") has no padding by default, so its
+   tap target is just the text's line height. .account-bar .back-link is more
+   specific and already padded, so it's unaffected by this. */
+@media (pointer: coarse) {
+  .back-link {
+    padding: 10px 0;
+    margin: -10px 0 2px;
+  }
+}
+
 .back-link:hover {
   color: var(--text-h);
 }
@@ -100,6 +110,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 16px;
   font-size: 12px;
 }
@@ -163,6 +175,13 @@ h2 {
   cursor: pointer;
 }
 
+@media (pointer: coarse) {
+  .burger-menu-toggle {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .burger-menu-toggle:hover {
   background: var(--pane-border);
 }
@@ -182,6 +201,8 @@ h2 {
   display: flex;
   flex-direction: column;
   min-width: 140px;
+  max-height: min(60vh, 320px);
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--pane-border);
   border-radius: 8px;
@@ -199,6 +220,12 @@ h2 {
   background: none;
   color: var(--text-h);
   cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .burger-menu-dropdown button {
+    padding: 12px 10px;
+  }
 }
 
 .burger-menu-dropdown button:hover {
@@ -226,6 +253,12 @@ h2 {
   overflow: hidden;
 }
 
+@media (max-width: 480px) {
+  .level-badge-bar {
+    width: 48px;
+  }
+}
+
 .level-badge-bar-fill {
   display: block;
   height: 100%;
@@ -241,6 +274,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -256,6 +291,12 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+@media (max-width: 480px) {
+  .game-screen {
+    padding: 20px 12px 32px;
+  }
 }
 
 /* Gentle per-league accent, echoing the game-select cards (see HomeScreen.css). */
@@ -379,6 +420,15 @@ h2 {
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--pane-border);
+}
+
+@media (max-width: 480px) {
+  /* Below this width even the 280px min-width can exceed the available
+     content area once game-screen padding is subtracted, causing horizontal
+     overflow. Forcing full-width panes guarantees a clean single column. */
+  .image-pane {
+    min-width: 100%;
+  }
 }
 
 .image-pane img {
