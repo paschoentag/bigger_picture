@@ -7,6 +7,10 @@ import './LoginScreen.css'
 
 type Mode = 'initial' | 'need-password' | 'signup' | 'locked'
 
+// Mirrors MIN_PASSWORD_LENGTH / MAX_PASSWORD_LENGTH in backend/src/password_auth/hashing.py.
+const MIN_PASSWORD_LENGTH = 10
+const MAX_PASSWORD_LENGTH = 127
+
 export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (user: User) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -14,12 +18,24 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (user: User) =
   const [mode, setMode] = useState<Mode>('initial')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [passwordTouched, setPasswordTouched] = useState(false)
+  const [confirmTouched, setConfirmTouched] = useState(false)
+
+  const passwordError =
+    password.length < MIN_PASSWORD_LENGTH
+      ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+      : null
+  const confirmError =
+    confirmPassword && confirmPassword !== password ? "Passwords don't match." : null
+  const signupBlocked = !!passwordError || !confirmPassword || !!confirmError
 
   const reset = () => {
     setMode('initial')
     setPassword('')
     setConfirmPassword('')
     setError(null)
+    setPasswordTouched(false)
+    setConfirmTouched(false)
   }
 
   const handleProbe = (e: FormEvent) => {
@@ -65,11 +81,10 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (user: User) =
 
   const handleSignup = (e: FormEvent) => {
     e.preventDefault()
-    if (!password || submitting) return
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.')
-      return
-    }
+    if (submitting) return
+    setPasswordTouched(true)
+    setConfirmTouched(true)
+    if (signupBlocked) return
 
     setSubmitting(true)
     setError(null)
@@ -149,27 +164,38 @@ export default function LoginScreen({ onLoggedIn }: { onLoggedIn: (user: User) =
                 className="login-input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setPasswordTouched(true)}
                 placeholder="Password"
-                minLength={10}
-                maxLength={127}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 disabled={submitting}
+                aria-invalid={passwordTouched && !!passwordError}
                 autoFocus
               />
+              {passwordTouched && passwordError && <p className="login-error">{passwordError}</p>}
               <input
                 type="password"
                 className="login-input"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                onBlur={() => setConfirmTouched(true)}
                 placeholder="Confirm password"
-                minLength={10}
-                maxLength={127}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 disabled={submitting}
+                aria-invalid={confirmTouched && !!confirmError}
               />
+              {confirmTouched && confirmError ? (
+                <p className="login-error">{confirmError}</p>
+              ) : (
+                !confirmPassword && <p className="login-hint">Re-enter your password to confirm.</p>
+              )}
               {error && <p className="login-error">{error}</p>}
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={submitting || password.length < 10 || !confirmPassword}
+                disabled={submitting || signupBlocked}
+                title={signupBlocked ? 'Enter matching passwords of at least 10 characters to continue.' : undefined}
               >
                 {submitting ? 'Creating account…' : 'Create account'}
               </button>
