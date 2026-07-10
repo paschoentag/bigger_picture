@@ -90,6 +90,16 @@ h2 {
   display: block;
 }
 
+/* Bare .back-link (e.g. "Back to games") has no padding by default, so its
+   tap target is just the text's line height. .account-bar .back-link is more
+   specific and already padded, so it's unaffected by this. */
+@media (pointer: coarse) {
+  .back-link {
+    padding: 10px 0;
+    margin: -10px 0 2px;
+  }
+}
+
 .back-link:hover {
   color: var(--text-h);
 }
