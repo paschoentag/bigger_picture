@@ -505,7 +505,7 @@ def get_next_candidates(dive_uuid: UUID, request: Request, n: int = 1, db: Sessi
             Image2.dive_id == dive.id,
             CandidatePair.id.notin_(annotated_candidate_ids),
         )
-        .order_by(CandidatePair.created_at.asc())
+        .order_by(CandidatePair.id.asc())
     )
     candidates = sample_pool(db, stmt, n)
     return [_to_next_candidate_response(candidate, db) for candidate in candidates]
