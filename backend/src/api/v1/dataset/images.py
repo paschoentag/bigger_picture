@@ -13,6 +13,7 @@ from src.api.v1.dataset._metadata import decode_metadata, encode_metadata
 from src.constants import IMAGE_STATUS_INT, INT_IMAGE_STATUS, ImageStatus
 from src.db import get_db
 from src.models.dataset import (
+    ImageCreateFromExternalUrlRequest,
     ImageCreateRequest,
     ImageListResponse,
     ImageResponse,
@@ -134,6 +135,85 @@ def create_image(payload: ImageCreateRequest, request: Request, db: Session = De
         # but only if it did not pre-exist this request.
         if not pre_existed:
             path.unlink(missing_ok=True)
+        raise HTTPException(status_code=409, detail="Image already exists")
+    db.commit()
+    db.refresh(image)
+    return _to_response(image, db)
+
+
+@router.post(
+    "/create-from-url",
+    response_model=ImageResponse,
+    status_code=201,
+    summary="Create Image From External URL",
+    description="""
+Link a new image from an external URL-based source (e.g., an image broker) instead of uploading bytes.
+The image is never stored locally; the URL is saved as filepath. Requires the scientist role.
+
+The image is always created with status "hidden". Width and height can be supplied explicitly 
+(recommended for performance) or omitted to fetch them from the remote source (slower).
+
+Fails with 404 if the dive does not exist, 422 if filepath is not a valid http(s) URL, 422 if 
+size_x/size_y are needed but cannot be fetched, or 409 if an image with this uuid or filepath already exists.
+""",
+)
+def create_image_from_url(payload: ImageCreateFromExternalUrlRequest, request: Request, db: Session = Depends(get_db)):
+    user = require_current_user(request)
+    
+    # Validate filepath is a full external URL
+    if not (payload.filepath.startswith("http://") or payload.filepath.startswith("https://")):
+        raise HTTPException(status_code=422, detail="filepath must be a full http(s) URL")
+    
+    dive_id = _resolve_dive_id(db, payload.dive_uuid)
+    
+    size_x = payload.size_x
+    size_y = payload.size_y
+    
+    # If dimensions not provided, try to fetch them from the URL
+    if size_x is None or size_y is None:
+        try:
+            import tempfile
+            import urllib.request
+            
+            # Download image to temp file
+            with tempfile.NamedTemporaryFile(suffix=".tmp", delete=False) as tmp:
+                with urllib.request.urlopen(payload.filepath, timeout=10) as response:
+                    if response.status != 200:
+                        raise HTTPException(status_code=422, detail=f"Failed to fetch image from URL: HTTP {response.status}")
+                    tmp.write(response.read())
+                tmp_path = Path(tmp.name)
+            
+            try:
+                fetched_x, fetched_y = read_image_dimensions(tmp_path)
+                if size_x is None:
+                    size_x = fetched_x
+                if size_y is None:
+                    size_y = fetched_y
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Could not fetch image dimensions from URL: {str(e)}")
+    
+    if size_x is None or size_y is None:
+        raise HTTPException(status_code=422, detail="size_x and size_y could not be determined and must be provided explicitly")
+    
+    try:
+        image = _create_image_row(
+            db,
+            uuid=payload.uuid,
+            filename=payload.filename,
+            filepath=payload.filepath,
+            dive_id=dive_id,
+            status_id=IMAGE_STATUS_INT[ImageStatus.HIDDEN],
+            size_x=size_x,
+            size_y=size_y,
+            metadata=payload.metadata,
+            difficulty=payload.difficulty,
+            priority=payload.priority,
+            creator_id=user.id,
+        )
+    except ConflictError:
+        db.rollback()
         raise HTTPException(status_code=409, detail="Image already exists")
     db.commit()
     db.refresh(image)

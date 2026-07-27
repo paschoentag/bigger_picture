@@ -461,6 +461,74 @@ class ImageCreateRequest(BaseModel):
     )
 
 
+class ImageCreateFromExternalUrlRequest(BaseModel):
+    """Request model to link an image from an external URL-based source (e.g., an image broker).
+    
+    Instead of uploading base64-encoded bytes, this references an image via its external URL.
+    The image is never stored locally on the backend; the URL is saved as the filepath.
+    Width and height can be supplied explicitly (e.g., if known from the broker) or left null.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "uuid": "8f8b65dc-fbf2-4dfb-bff2-f34072bb97e2",
+                "filename": "frame_0001.jpg",
+                "filepath": "https://osis.geomar.de/images/broker/abc123def456",
+                "dive_uuid": "1a6ccf07-c766-4934-a6a5-0ca6dbdb5a0b",
+                "size_x": 1920,
+                "size_y": 1080,
+                "metadata": None,
+                "difficulty": None,
+                "priority": None,
+            }
+        }
+    )
+
+    uuid: UUID = Field(description="Unique identifier to assign to the new image.")
+
+    filename: str = Field(
+        min_length=1, max_length=255, description="Display filename of the image."
+    )
+
+    filepath: str = Field(
+        min_length=1,
+        max_length=2048,
+        description="Full external URL (e.g., https://osis.geomar.de/images/broker/...). Must start with http:// or https://. Must be unique.",
+    )
+
+    dive_uuid: UUID = Field(
+        description="Unique identifier of an existing dive to associate the image with."
+    )
+
+    size_x: int | None = Field(
+        default=None,
+        ge=1,
+        description="Image width in pixels. If omitted, will be fetched from the external source (slower).",
+    )
+
+    size_y: int | None = Field(
+        default=None,
+        ge=1,
+        description="Image height in pixels. If omitted, will be fetched from the external source (slower).",
+    )
+
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional arbitrary JSON object to attach to the image.",
+    )
+
+    difficulty: int | None = Field(
+        default=None,
+        description="Stored verbatim; not currently used by any query logic.",
+    )
+
+    priority: int | None = Field(
+        default=None,
+        description="Stored verbatim; not currently used by any query logic.",
+    )
+
+
 class ImageUpdateRequest(BaseModel):
     """Request used to partially update an existing image, optionally replacing its file.
 

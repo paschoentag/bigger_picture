@@ -80,8 +80,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
-/** Builds a URL for an asset served from the backend's `/assets` static mount, given an `Image.filepath`. */
+/**
+ * Builds a URL for an asset given an `Image.filepath`. The filepath can be either:
+ * - A relative path (e.g., "dive-uuid/image.jpg") → served from backend `/assets` mount
+ * - An absolute external URL (e.g., "https://...") → used directly
+ * This supports both local storage and external image brokers like osis.geomar.de.
+ */
 export function assetUrl(filepath: string): string {
+  if (filepath.startsWith('http://') || filepath.startsWith('https://')) {
+    return filepath
+  }
   return `${API_BASE_URL}/assets/${filepath}`
 }
 
