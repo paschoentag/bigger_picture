@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { createImage, uploadImagesZip } from '../../api/datasetApi'
+import { createImage, uploadImagesZip, uploadBrokerHandlesCsv } from '../../api/datasetApi'
+import type { BrokerCsvImportResult } from '../../api/datasetApi'
 import { ApiError } from '../../api/client'
 import './AdminPanels.css'
 import './CreateStrideCandidatePairsModal.css'
 import './UploadImagesModal.css'
 
-type Mode = 'files' | 'zip'
+type Mode = 'files' | 'zip' | 'broker-csv'
 
 export default function UploadImagesModal({
   diveUuid,
@@ -21,6 +22,8 @@ export default function UploadImagesModal({
 
   const [files, setFiles] = useState<File[]>([])
   const [zipFile, setZipFile] = useState<File | null>(null)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [csvResult, setCsvResult] = useState<BrokerCsvImportResult | null>(null)
 
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -32,6 +35,27 @@ export default function UploadImagesModal({
 
   const handleZipChange = (e: ChangeEvent<HTMLInputElement>) => {
     setZipFile(e.target.files?.[0] ?? null)
+  }
+
+  const handleCsvChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setCsvFile(e.target.files?.[0] ?? null)
+    setCsvResult(null)
+  }
+
+  const handleUploadBrokerCsv = async () => {
+    if (uploading || !csvFile) return
+    setFormError(null)
+    setCsvResult(null)
+    setUploading(true)
+    try {
+      const result = await uploadBrokerHandlesCsv(diveUuid, csvFile)
+      setCsvResult(result)
+      onUploaded(result.created)
+    } catch (err: unknown) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not upload the CSV.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleUploadFiles = async () => {
@@ -76,9 +100,13 @@ export default function UploadImagesModal({
     }
   }
 
-  const handleUpload = () => (mode === 'files' ? handleUploadFiles() : handleUploadZip())
+  const handleUpload = () => {
+    if (mode === 'files') return handleUploadFiles()
+    if (mode === 'zip') return handleUploadZip()
+    return handleUploadBrokerCsv()
+  }
 
-  const canSubmit = mode === 'files' ? files.length > 0 : zipFile !== null
+  const canSubmit = mode === 'files' ? files.length > 0 : mode === 'zip' ? zipFile !== null : csvFile !== null
 
   return (
     <div className="stride-modal-backdrop" onClick={uploading ? undefined : onCancel}>
@@ -120,9 +148,20 @@ export default function UploadImagesModal({
               />{' '}
               Zip archive
             </label>
+            <label>
+              <input
+                type="radio"
+                name="upload-mode"
+                checked={mode === 'broker-csv'}
+                disabled={uploading}
+                onChange={() => setMode('broker-csv')}
+              />{' '}
+              Broker CSV
+            </label>
           </div>
 
           {mode === 'files' ? (
+            // ...existing files UI...
             <>
               <label className="admin-form-field">
                 Select images
@@ -134,7 +173,7 @@ export default function UploadImagesModal({
                 </p>
               )}
             </>
-          ) : (
+          ) : mode === 'zip' ? (
             <>
               <label className="admin-form-field">
                 Zip file
@@ -146,6 +185,28 @@ export default function UploadImagesModal({
                 <code>filename;uuid</code> - any image not listed there gets a random uuid.
               </p>
               {zipFile && <p className="game-status">{uploading ? 'Uploading…' : `Selected: ${zipFile.name}`}</p>}
+            </>
+          ) : (
+            <>
+              <label className="admin-form-field">
+                Broker CSV file
+                <input type="file" accept=".csv,text/csv" disabled={uploading} onChange={handleCsvChange} />
+              </label>
+              <p className="game-status">
+                Semicolon-delimited CSV with columns:{' '}
+                <code>filename;broker_url;broker_uuid;size_x;size_y</code>. Images are linked by
+                URL — no bytes are stored locally. The{' '}
+                <code>broker_uuid</code> is saved in the image metadata.
+              </p>
+              {csvFile && <p className="game-status">{uploading ? 'Importing…' : `Selected: ${csvFile.name}`}</p>}
+              {csvResult && (
+                <p className="game-status">
+                  ✅ {csvResult.created} created, {csvResult.skipped} skipped.
+                  {csvResult.errors.length > 0 && (
+                    <> <strong>Errors:</strong> {csvResult.errors.join('; ')}</>
+                  )}
+                </p>
+              )}
             </>
           )}
 

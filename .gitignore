@@ -11,3 +11,6 @@ __pycache__/
 # per-dataset CSVs and upload progress ledgers. Source images stay tracked.
 scripts/**/*.csv
 *.state.json
+broker_handles.csv
+backend/.localdb/
+backend/src/bigger_picture.egg-info/

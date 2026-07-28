@@ -772,3 +772,15 @@ class ImageZipImportResponse(BaseModel):
 
     created: int = Field(description="Number of images created.")
     skipped: int = Field(description="Number of non-image files in the zip that were ignored.")
+
+
+class BrokerCsvImportResponse(BaseModel):
+    """Result of a broker-handle CSV import into a single dive."""
+
+    created: int = Field(description="Number of images successfully created.")
+    skipped: int = Field(description="Number of rows skipped due to missing/invalid data.")
+    errors: list[str] = Field(
+        default_factory=list,
+        description="Per-row error messages for any rows that failed.",
+    )
+

@@ -13,6 +13,7 @@ from src.api.v1.dataset._metadata import decode_metadata, encode_metadata
 from src.constants import IMAGE_STATUS_INT, INT_IMAGE_STATUS, ImageStatus
 from src.db import get_db
 from src.models.dataset import (
+    BrokerCsvImportResponse,
     ImageCreateFromExternalUrlRequest,
     ImageCreateRequest,
     ImageListResponse,
@@ -294,6 +295,107 @@ def zip_upload_images(
         shutil.rmtree(work_dir, ignore_errors=True)
 
     return ImageZipImportResponse(created=created, skipped=skipped)
+
+
+@router.post(
+    "/broker-csv-upload",
+    response_model=BrokerCsvImportResponse,
+    status_code=201,
+    summary="Bulk Import Images From Broker CSV",
+    description="""
+Import images from an external image broker using a semicolon-delimited CSV file. Requires the scientist role.
+
+Each row must have columns: `filename`, `broker_url`, `broker_uuid`, `size_x`, `size_y`.
+- `broker_url` is stored as the image filepath and used directly by the frontend to render the image.
+- `broker_uuid` is stored in the image metadata as `{"broker_uuid": "..."}`.
+- `size_x` / `size_y` must be valid positive integers.
+
+Rows with missing columns, invalid data, or duplicate broker_url/broker_uuid are skipped and reported in the errors list.
+All successfully created images are created with status "hidden".
+""",
+)
+def broker_csv_upload(
+    request: Request,
+    dive_uuid: UUID = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    import csv
+    import io
+    from uuid import uuid4 as _uuid4
+
+    user = require_current_user(request)
+    dive_id = _resolve_dive_id(db, dive_uuid)
+
+    content = file.file.read().decode("utf-8-sig")  # utf-8-sig strips BOM if present
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
+
+    required_cols = {"filename", "broker_url", "broker_uuid", "size_x", "size_y"}
+
+    created = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for i, row in enumerate(reader, start=2):  # start=2 because row 1 is header
+        # Check required columns exist
+        missing = required_cols - set(row.keys())
+        if missing:
+            errors.append(f"Row {i}: missing columns {missing}")
+            skipped += 1
+            continue
+
+        filename = (row.get("filename") or "").strip()
+        broker_url = (row.get("broker_url") or "").strip()
+        broker_uuid_str = (row.get("broker_uuid") or "").strip()
+        size_x_str = (row.get("size_x") or "").strip()
+        size_y_str = (row.get("size_y") or "").strip()
+
+        if not filename or not broker_url or not broker_uuid_str:
+            errors.append(f"Row {i}: filename, broker_url and broker_uuid must not be empty")
+            skipped += 1
+            continue
+
+        if not (broker_url.startswith("http://") or broker_url.startswith("https://")):
+            errors.append(f"Row {i}: broker_url must start with http:// or https://")
+            skipped += 1
+            continue
+
+        try:
+            size_x = int(size_x_str)
+            size_y = int(size_y_str)
+            if size_x <= 0 or size_y <= 0:
+                raise ValueError("must be positive")
+        except (ValueError, TypeError):
+            errors.append(f"Row {i}: size_x and size_y must be positive integers")
+            skipped += 1
+            continue
+
+        try:
+            from src.services.images import create_image as _create_row
+            from src.services.errors import ConflictError as _ConflictError
+            _create_row(
+                db,
+                uuid=_uuid4(),
+                filename=filename,
+                filepath=broker_url,
+                dive_id=dive_id,
+                status_id=IMAGE_STATUS_INT[ImageStatus.HIDDEN],
+                size_x=size_x,
+                size_y=size_y,
+                metadata={"broker_uuid": broker_uuid_str},
+                difficulty=None,
+                priority=None,
+                creator_id=user.id,
+            )
+            db.flush()
+            created += 1
+        except Exception as exc:
+            db.rollback()
+            errors.append(f"Row {i} ({filename}): {exc}")
+            skipped += 1
+
+    db.commit()
+    return BrokerCsvImportResponse(created=created, skipped=skipped, errors=errors)
 
 
 @router.post(

@@ -74,6 +74,12 @@ export interface ImageZipImportResult {
   skipped: number
 }
 
+export interface BrokerCsvImportResult {
+  created: number
+  skipped: number
+  errors: string[]
+}
+
 /**
  * Scientist only - real endpoint: POST /api/v1/dataset/images/zip-upload (multipart/form-data,
  * fields "dive_uuid" and "file"). Every file in the zip is identified by its magic bytes; anything
@@ -87,6 +93,21 @@ export function uploadImagesZip(diveUuid: string, zipFile: File): Promise<ImageZ
   formData.append('dive_uuid', diveUuid)
   formData.append('file', zipFile)
   return apiFetch<ImageZipImportResult>('/api/v1/dataset/images/zip-upload', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+/**
+ * Scientist only - real endpoint: POST /api/v1/dataset/images/broker-csv-upload
+ * (multipart/form-data, fields "dive_uuid" and "file").
+ * The CSV must be semicolon-delimited with columns: filename, broker_url, broker_uuid, size_x, size_y.
+ */
+export function uploadBrokerHandlesCsv(diveUuid: string, csvFile: File): Promise<BrokerCsvImportResult> {
+  const formData = new FormData()
+  formData.append('dive_uuid', diveUuid)
+  formData.append('file', csvFile)
+  return apiFetch<BrokerCsvImportResult>('/api/v1/dataset/images/broker-csv-upload', {
     method: 'POST',
     body: formData,
   })
